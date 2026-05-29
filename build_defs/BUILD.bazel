@@ -1,0 +1,3 @@
+# This package provides Bazel macros for log-list and tlog-policy generation.
+
+exports_files(["log_list_files_test.go"])

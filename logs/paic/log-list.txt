@@ -1,0 +1,13 @@
+#
+# PAIC (Private AI Compute) transparency log origins — production.
+# Contact: TODO
+#
+logs/v0
+
+vkey paic.google.com/log/0+609b8245+Ae74NkuIVBowBYu37xUJ5e3wf52bMPhW9e59idWfWR2j
+qpd 10000
+contact TODO
+
+vkey paic.google.com/log/1+4c1d98f3+ATtAPhpoER4pucyYdjINViavBdOHZAubPCz9xlqnw7Oy
+qpd 10000
+contact TODO

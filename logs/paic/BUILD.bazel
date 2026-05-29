@@ -1,0 +1,11 @@
+load("//build_defs:tlog.bzl", "log_list_test")
+
+exports_files([
+    "log-list.txt",
+    "log-list-dev.txt",
+])
+
+log_list_test(
+    name = "log_list_files_test",
+    srcs = glob(["*.txt"]),
+)

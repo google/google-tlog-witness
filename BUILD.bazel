@@ -1,0 +1,15 @@
+load("//build_defs:tlog.bzl", "concatenated_log_list", "log_list_test")
+
+concatenated_log_list(
+    name = "log-list-10qps-10klogs",
+    srcs = [
+        "//logs/paic:log-list.txt",
+        # Add additional product log lists here as they are onboarded.
+    ],
+    visibility = ["//visibility:public"],
+)
+
+log_list_test(
+    name = "log_list_files_test",
+    srcs = [":log-list-10qps-10klogs.txt"],
+)

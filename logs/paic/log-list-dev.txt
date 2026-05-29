@@ -1,0 +1,13 @@
+#
+# PAIC (Private AI Compute) transparency log origins — development.
+# Contact: TODO
+#
+logs/v0
+
+vkey paic-dev.google.com/log/0+cdcac750+AS12giMNuuSEK1QkSqgYSNyWR2zTbOmGlfKW+upXx13v
+qpd 10000
+contact TODO
+
+vkey paic-dev.google.com/log/1+04afdba2+AXJbA1ubwHWF5agPJjkgsLhdhAkCRDB1Q1pT/K4Sf8ZA
+qpd 10000
+contact TODO

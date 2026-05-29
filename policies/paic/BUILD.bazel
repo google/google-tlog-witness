@@ -1,0 +1,19 @@
+load("//build_defs:tlog.bzl", "tlog_policy_pair")
+
+# Production log and verifier policies.
+tlog_policy_pair(
+    name = "prod",
+    log_lists = ["//logs/paic:log-list.txt"],
+    witnesses = ["//witnesses:transparency-dev.txt"],
+    quorum = "tf",
+    visibility = ["//visibility:public"],
+)
+
+# Development log and verifier policies.
+tlog_policy_pair(
+    name = "dev",
+    log_lists = ["//logs/paic:log-list-dev.txt"],
+    witnesses = ["//witnesses:transparency-dev.txt"],
+    quorum = "tf",
+    visibility = ["//visibility:public"],
+)

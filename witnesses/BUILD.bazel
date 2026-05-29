@@ -1,0 +1,10 @@
+load("@rules_go//go:def.bzl", "go_test")
+
+exports_files(["transparency-dev.txt"])
+
+go_test(
+    name = "witness_files_test",
+    srcs = ["witness_files_test.go"],
+    data = glob(["*.txt"]),
+    deps = ["//internal/vkey"],
+)
