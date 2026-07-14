@@ -12,14 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//build_defs:tlog.bzl", "log_list_test")
+name: CI
 
-exports_files([
-    "log-list.txt",
-    "log-list-dev.txt",
-])
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
-log_list_test(
-    name = "log_list_files_test",
-    srcs = glob(["*.txt"]),
-)
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
+
+      - name: Test
+        run: bazel test //...

@@ -8,8 +8,7 @@ witness interactions. It contains:
   [log-list format](https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md).
 - **Witness configurations**: Endpoints and keys for witnesses that cosign
   Google's log checkpoints, following the
-  [tlog-policy format](https://github.com/C2SP/C2SP/pull/233)
-  (TODO: update link when the spec is merged).
+  [tlog-policy format](https://c2sp.org/tlog-policy).
 - **tlog-policy files**: Generated policy files consumed by log operators and
   verifiers.
 
@@ -135,3 +134,7 @@ The Bazel macros in `build_defs/tlog.bzl` provide:
   (`<name>-log-tlog-policy` and `<name>-verifier-tlog-policy`) from shared
   inputs. An optional `verifier_quorum` allows the verifier quorum to diverge
   temporarily during a policy rollout.
+- `log_list_test(name, srcs)` — validates log-list files against the logs/v0
+  format.
+- `tlog_policy_test(name, srcs)` — validates tlog-policy files against the
+  [C2SP spec](https://c2sp.org/tlog-policy).

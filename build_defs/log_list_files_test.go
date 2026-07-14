@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Package log_list_files_test validates log-list files against the
 // witness-network log-list format (logs/v0):
 // https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md
@@ -45,10 +59,9 @@ func validateLogListFile(path string) []string {
 	sawHeader := false
 
 	// Per-log state.
-	currentLogVkey := "" // the vkey origin of the log currently being parsed
-	currentLogLine := 0  // line where current log started (for error context)
-	sawVkey := false     // whether current log block has a vkey line
-	logCount := 0        // total logs seen
+	currentLogLine := 0 // line where current log started (for error context)
+	sawVkey := false    // whether current log block has a vkey line
+	logCount := 0       // total logs seen
 
 	// Cross-log uniqueness.
 	origins := make(map[string]int) // origin -> line number where first defined
@@ -112,12 +125,10 @@ func validateLogListFile(path string) []string {
 
 			if len(fields) != 2 {
 				errs = append(errs, fmt.Sprintf("line %d: vkey line must have exactly 1 value, got %d: %q", lineNum, len(fields)-1, trimmed))
-				currentLogVkey = ""
 				continue
 			}
 
 			vkeyStr := fields[1]
-			currentLogVkey = ""
 
 			// Validate vkey format: <origin>+<keyid>+<base64key>.
 			vkeyErrs, vkeyOrigin := vkey.Validate(vkeyStr, lineNum)
@@ -125,7 +136,6 @@ func validateLogListFile(path string) []string {
 				errs = append(errs, vkeyErrs...)
 			}
 			if vkeyOrigin != "" {
-				currentLogVkey = vkeyOrigin
 				if prev, exists := origins[vkeyOrigin]; exists {
 					errs = append(errs, fmt.Sprintf("line %d: duplicate origin %q (first seen on line %d)", lineNum, vkeyOrigin, prev))
 				} else {
@@ -162,7 +172,6 @@ func validateLogListFile(path string) []string {
 		if key != "vkey" && !sawVkey {
 			errs = append(errs, fmt.Sprintf("line %d: %q line appears before any vkey line", lineNum, key))
 		}
-		_ = currentLogVkey // suppress unused warning
 	}
 
 	if err := scanner.Err(); err != nil {

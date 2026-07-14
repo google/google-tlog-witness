@@ -1,3 +1,17 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Bazel macros for assembling transparency log lists and tlog-policy files."""
 
 load("@rules_go//go:def.bzl", "go_test")
@@ -31,13 +45,13 @@ def tlog_policy(name, log_lists, witnesses, quorum, groups = [], visibility = No
     Assembles a tlog-policy by directly inlining its inputs. Each input
     section is preceded by a header comment indicating the source file.
     The final section contains any additional groups and the quorum rule,
-    which come from the BUILD rule.
+    which come from the BUILD rule. The output file will be <name>.policy.
+    Also creates a test target <name>-policy-test that validates the policy.
 
-    Spec: https://github.com/C2SP/C2SP/pull/233
-    TODO: update the link above when the C2SP PR is merged.
+    Spec: https://c2sp.org/tlog-policy
 
     Args:
-        name: Target name. The output file will be <name>.txt.
+        name: Target name. The output file will be <name>.policy.
         log_lists: List of log-list file labels. All vkeys are extracted
             and emitted as "log" lines.
         witnesses: List of witness config file labels. Contents are
@@ -64,10 +78,17 @@ def tlog_policy(name, log_lists, witnesses, quorum, groups = [], visibility = No
     native.genrule(
         name = name,
         srcs = log_lists + witnesses,
-        outs = [name + ".txt"],
+        outs = [name + ".policy"],
         cmd = " ".join(cmd_parts),
         tools = ["//tools:gen_tlog_policy"],
         visibility = visibility,
+    )
+
+    tlog_policy_test(
+        name = name + ".policy-test",
+        srcs = [
+            name + ".policy",
+        ],
     )
 
 def tlog_policy_pair(name, log_lists, witnesses, quorum, verifier_quorum = None, groups = [], visibility = None):
@@ -95,7 +116,7 @@ def tlog_policy_pair(name, log_lists, witnesses, quorum, verifier_quorum = None,
         visibility: Standard Bazel visibility.
     """
     tlog_policy(
-        name = name + "-log-tlog-policy",
+        name = name + "-log",
         log_lists = log_lists,
         witnesses = witnesses,
         quorum = quorum,
@@ -103,7 +124,7 @@ def tlog_policy_pair(name, log_lists, witnesses, quorum, verifier_quorum = None,
         visibility = visibility,
     )
     tlog_policy(
-        name = name + "-verifier-tlog-policy",
+        name = name + "-verifier",
         log_lists = log_lists,
         witnesses = witnesses,
         quorum = verifier_quorum or quorum,
@@ -131,3 +152,21 @@ def log_list_test(name, srcs, **kwargs):
         **kwargs
     )
 
+def tlog_policy_test(name, srcs, **kwargs):
+    """Validates tlog-policy files against the C2SP spec.
+
+    Creates a go_test target that checks each file in srcs conforms to the
+    tlog-policy specification: https://c2sp.org/tlog-policy
+
+    Args:
+        name: Target name for the test.
+        srcs: List of tlog-policy file labels (typically genrule outputs).
+        **kwargs: Additional arguments passed to go_test (e.g. tags, size).
+    """
+    go_test(
+        name = name,
+        srcs = ["//build_defs:tlog_policy_files_test.go"],
+        data = srcs,
+        deps = ["//internal/vkey"],
+        **kwargs
+    )

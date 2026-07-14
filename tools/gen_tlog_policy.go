@@ -1,9 +1,22 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // gen_tlog_policy generates a tlog-policy file by inlining log-list and
 // witness configuration inputs.
 //
 // The output format follows the tlog-policy specification:
-// https://github.com/C2SP/C2SP/pull/233
-// TODO: update the link above when the C2SP PR is merged.
+// https://c2sp.org/tlog-policy
 //
 // The generated file is structured as follows:
 //   - For each log-list input: a header comment identifying the source,
