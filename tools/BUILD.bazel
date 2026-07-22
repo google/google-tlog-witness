@@ -20,13 +20,13 @@ load("@rules_go//go:def.bzl", "go_binary")
 go_binary(
     name = "gen_log_list",
     srcs = ["gen_log_list.go"],
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
     deps = ["//internal/flagutil"],
 )
 
 go_binary(
     name = "gen_tlog_policy",
     srcs = ["gen_tlog_policy.go"],
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
     deps = ["//internal/flagutil"],
 )
