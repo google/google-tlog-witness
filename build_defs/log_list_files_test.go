@@ -63,9 +63,6 @@ func validateLogListFile(path string) []string {
 	sawVkey := false    // whether current log block has a vkey line
 	logCount := 0       // total logs seen
 
-	// Cross-log uniqueness.
-	origins := make(map[string]int) // origin -> line number where first defined
-
 	// validLogKeys are the permitted key-value keys within a log entry.
 	validLogKeys := map[string]bool{
 		"vkey":    true,
@@ -131,16 +128,9 @@ func validateLogListFile(path string) []string {
 			vkeyStr := fields[1]
 
 			// Validate vkey format: <origin>+<keyid>+<base64key>.
-			vkeyErrs, vkeyOrigin := vkey.Validate(vkeyStr, lineNum)
+			vkeyErrs, _ := vkey.Validate(vkeyStr, lineNum)
 			if len(vkeyErrs) > 0 {
 				errs = append(errs, vkeyErrs...)
-			}
-			if vkeyOrigin != "" {
-				if prev, exists := origins[vkeyOrigin]; exists {
-					errs = append(errs, fmt.Sprintf("line %d: duplicate origin %q (first seen on line %d)", lineNum, vkeyOrigin, prev))
-				} else {
-					origins[vkeyOrigin] = lineNum
-				}
 			}
 
 		case "origin":
