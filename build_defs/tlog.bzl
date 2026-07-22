@@ -65,13 +65,12 @@ def tlog_policy(name, log_lists, witnesses, quorum, groups = [], visibility = No
         visibility: Standard Bazel visibility.
     """
     cmd_parts = ["$(location //tools:gen_tlog_policy)"]
-    for l in log_lists:
-        cmd_parts.append("--log-list=$(location %s)" % l)
-    for w in witnesses:
-        cmd_parts.append("--witnesses=$(location %s)" % w)
-    for g in groups:
-        g_normalized = g if g.startswith("group ") else "group " + g
-        cmd_parts.append("--group=\"%s\"" % g_normalized)
+    for log_list in log_lists:
+        cmd_parts.append("--log-list=$(location %s)" % log_list)
+    for witness in witnesses:
+        cmd_parts.append("--witnesses=$(location %s)" % witness)
+    for group in groups:
+        cmd_parts.append("--group=\"%s\"" % group)
     cmd_parts.append("--quorum=%s" % quorum)
     cmd_parts.append("> $@")
 
