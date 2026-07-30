@@ -21,6 +21,7 @@ concatenated_log_list(
     name = "log-list-10qps-10klogs",
     srcs = [
         "//logs/paic:log-list.txt",
+        "//logs/paic:log-list-dev.txt",
         # Add additional product log lists here as they are onboarded.
     ],
     visibility = ["//visibility:public"],
