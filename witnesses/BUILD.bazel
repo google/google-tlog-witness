@@ -14,7 +14,7 @@
 
 load("@rules_go//go:def.bzl", "go_test")
 
-exports_files(["transparency-dev.txt"])
+exports_files(glob(["*.txt"]))
 
 go_test(
     name = "witnesses_test",

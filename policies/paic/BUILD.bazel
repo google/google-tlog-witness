@@ -26,8 +26,12 @@ tlog_policy_pair(
 # Development log and verifier policies.
 tlog_policy_pair(
     name = "dev",
+    groups = ["group tf-and-glasklar all tf glasklar"],
     log_lists = ["//logs/paic:log-list-dev.txt"],
-    quorum = "tf",
+    quorum = "tf-and-glasklar",
     visibility = ["//visibility:public"],
-    witnesses = ["//witnesses:transparency-dev.txt"],
+    witnesses = [
+        "//witnesses:transparency-dev.txt",
+        "//witnesses:glasklar.txt",
+    ],
 )
