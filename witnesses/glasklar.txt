@@ -1,0 +1,14 @@
+#
+# Witness group operated by Glasklar Teknik.  For more info, see:
+# https://git.glasklar.is/glasklar/services/witnessing/-/blob/main/g1.witness.glasklar.is/about.md
+#
+witness glasklar-g1-01-ed25519 01.g1.witness.glasklar.is+b11e3810+ATe1mTYMbY5pNxIrVQRuXG8euiPRKHZe3WHMqSQ78asw https://01.g1.witness.glasklar.is
+group glasklar-g1-01 all glasklar-g1-01-ed25519
+
+witness glasklar-g1-02-ed25519 02.g1.witness.glasklar.is+d62e5f3b+AeGLhNYlJ/C8gjPtFHdqYT+uqZ/eBj7JIwGdguZUo7WS https://02.g1.witness.glasklar.is
+group glasklar-g1-02 all glasklar-g1-02-ed25519
+
+witness glasklar-g1-03-ed25519 03.g1.witness.glasklar.is+9331a7c0+ASFcxTWdOgeWGcbpUf8tSZKAVYeO9+a0wJOV0bv2S2ik https://03.g1.witness.glasklar.is
+group glasklar-g1-03 all glasklar-g1-03-ed25519
+
+group glasklar any glasklar-g1-01 glasklar-g1-02 glasklar-g1-03
