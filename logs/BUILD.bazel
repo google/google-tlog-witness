@@ -12,16 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@gazelle//:def.bzl", "gazelle")
+load("@bazel_lib//lib:write_source_files.bzl", "write_source_file")
 load("//build_defs:tlog.bzl", "concatenated_log_list", "log_list_test")
 
-gazelle(name = "gazelle")
-
-# Deprecated. Please use //logs:10qps-10klogs or
-# read //logs/log-list-10qps-10klogs.txt directly.
-# TODO(benbirt): Remove this target.
 concatenated_log_list(
-    name = "log-list-10qps-10klogs",
+    name = "10qps-10klogs",
     srcs = [
         "//logs/paic:log-list.txt",
         "//logs/paic:log-list-dev.txt",
@@ -32,5 +27,11 @@ concatenated_log_list(
 
 log_list_test(
     name = "log_list_files_test",
-    srcs = [":log-list-10qps-10klogs.txt"],
+    srcs = [":10qps-10klogs.txt"],
+)
+
+write_source_file(
+    name = "copy_generated_10qps-10klogs_list",
+    in_file = ":10qps-10klogs.txt",
+    out_file = "log-list-10qps-10klogs.txt",
 )
