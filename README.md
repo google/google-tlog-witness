@@ -20,7 +20,7 @@ To publish a new log origin:
    following the
    [log-list format](https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md).
 2. Add a `BUILD.bazel` with `exports_files(["log-list.txt"])`.
-3. Add your log-list to the combined list target in the root `BUILD.bazel`.
+3. Add your log-list to the combined list target in `logs/BUILD.bazel`.
 4. Create `tlog_policy()` targets for your product under `policies/<product>/`.
 5. Submit a pull request.
 
@@ -62,11 +62,20 @@ For example, PAIC's policies live in `//policies/paic/` and can be built with:
 bazel build //policies/paic/...  # builds prod-{log,verifier}-tlog-policy and dev-{log,verifier}-tlog-policy
 ```
 
-The combined log list for witnesses is also available:
+The combined log list for witnesses is checked in at `logs/log-list-10qps-10klogs.txt` so that it is served over HTTPS at:
+
+```
+https://raw.githubusercontent.com/google/google-tlog-witness/main/logs/log-list-10qps-10klogs.txt
+```
+
+When the source log lists change, update the checked-in copy by running:
 
 ```bash
-bazel build //:log-list-10qps-10klogs
+bazel run //logs:copy_generated_10qps-10klogs_list
 ```
+
+A test will fail if the checked-in file falls out of sync with the generated
+output.
 
 ## Policy rollout
 
