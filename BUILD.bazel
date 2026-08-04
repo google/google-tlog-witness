@@ -13,24 +13,5 @@
 # limitations under the License.
 
 load("@gazelle//:def.bzl", "gazelle")
-load("//build_defs:tlog.bzl", "concatenated_log_list", "log_list_test")
 
 gazelle(name = "gazelle")
-
-# Deprecated. Please use //logs:10qps-10klogs or
-# read //logs/log-list-10qps-10klogs.txt directly.
-# TODO(benbirt): Remove this target.
-concatenated_log_list(
-    name = "log-list-10qps-10klogs",
-    srcs = [
-        "//logs/paic:log-list.txt",
-        "//logs/paic:log-list-dev.txt",
-        # Add additional product log lists here as they are onboarded.
-    ],
-    visibility = ["//visibility:public"],
-)
-
-log_list_test(
-    name = "log_list_files_test",
-    srcs = [":log-list-10qps-10klogs.txt"],
-)
