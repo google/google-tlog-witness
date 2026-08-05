@@ -1,0 +1,97 @@
+/*
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+:root {
+  --accent: #1a73e8;
+  --bg: #fff;
+  --fg: #202124;
+  --muted: #5f6368;
+  --border: #dadce0;
+  --code-bg: #f1f3f4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #8ab4f8;
+    --bg: #202124;
+    --fg: #e8eaed;
+    --muted: #9aa0a6;
+    --border: #3c4043;
+    --code-bg: #303134;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Google Sans', 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.6;
+}
+
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+h2 { margin-top: 2rem; font-size: 1.25rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+
+.subtitle { color: var(--muted); margin-top: 0; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code {
+  background: var(--code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 0.8em;
+  line-height: 1.4;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+details summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+dl { margin: 0; }
+dt { font-weight: 600; margin-top: 0.75rem; }
+dd { margin-left: 1rem; color: var(--muted); }
+
+ul { padding-left: 1.5rem; }
+
+footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+}

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<!--
+Copyright 2026 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Witnessing Google's Transparency Logs</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>Witnessing Google's Transparency Logs</h1>
+    <p class="subtitle">
+      <a href="https://github.com/google/google-tlog-witness">github.com/google/google-tlog-witness</a>
+    </p>
+
+    <section>
+      <h2>What is this?</h2>
+      <p>
+        This site is the home of <strong>Google's transparency log witness
+        programme</strong>. It publishes the log origins that Google makes
+        available for witness cosigning, and coordinates the witness
+        configurations used by log operators and verifiers.
+      </p>
+      <p>
+        The canonical source of truth is the
+        <a href="https://github.com/google/google-tlog-witness">google-tlog-witness</a>
+        GitHub repository, which contains:
+      </p>
+      <ul>
+        <li>
+          <strong>Log lists</strong> &mdash; the set of Google-operated
+          transparency log origins published for witness discovery, following
+          the
+          <a href="https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md">log-list format</a>.
+        </li>
+        <li>
+          <strong>Witness configurations</strong> &mdash; endpoints and keys
+          for witnesses that cosign Google's log checkpoints, following the
+          <a href="https://c2sp.org/tlog-policy">tlog-policy format</a>.
+        </li>
+        <li>
+          <strong>tlog-policy files</strong> &mdash; generated policy files
+          consumed by log operators and verifiers.
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Log list</h2>
+      <p>
+        The combined log list for witnesses is available at:<br>
+        <code><a href="log-list-10qps-10klogs.txt">log-list-10qps-10klogs.txt</a></code>
+      </p>
+      <p>
+        This file is rebuilt from the repo on every commit to
+        <code>main</code> and follows the
+        <a href="https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md">witness-network log-list format</a>.
+      </p>
+      <details>
+        <summary>Preview log-list contents</summary>
+        <pre id="log-list-preview">Loading…</pre>
+      </details>
+    </section>
+
+    <section>
+      <h2>Getting involved</h2>
+      <p>
+        To add or update a witness, create or edit a file under
+        <code>witnesses/</code> and submit a pull request. See the
+        <a href="https://github.com/google/google-tlog-witness#for-witness-operators">README</a>
+        for details on the witness file format.
+      </p>
+    </section>
+
+    <footer>
+      <p>
+        &copy; Google LLC &mdash;
+        <a href="https://github.com/google/google-tlog-witness/blob/main/LICENSE">Apache 2.0</a>
+      </p>
+    </footer>
+  </main>
+
+  <script>
+    fetch('log-list-10qps-10klogs.txt')
+      .then(r => r.text())
+      .then(t => { document.getElementById('log-list-preview').textContent = t; })
+      .catch(() => { document.getElementById('log-list-preview').textContent = 'Failed to load.'; });
+  </script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+
+# Allow only one Pages deployment at a time. Queued runs are collapsed to the
+# latest, but an in-flight deployment is never cancelled, so a rapid sequence
+# of merges cannot abort a production deploy partway through.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+# Workflow-level permissions apply to the build job, which only needs to read
+# the repository. The deploy job grants itself the additional scopes it needs
+# at job level, so that the build job never holds them.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This workflow only reads the repository, so there is no reason to
+          # leave the GITHUB_TOKEN behind in .git/config after checkout.
+          persist-credentials: false
+
+      - name: Build site
+        run: |
+          mkdir -p _site
+          cp site/index.html _site/index.html
+          cp site/style.css _site/style.css
+          cp logs/log-list-10qps-10klogs.txt _site/log-list-10qps-10klogs.txt
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Replaces the workflow-level permissions for this job. Publishing to Pages
+    # and minting the OIDC token that proves where the deployment came from are
+    # the only scopes needed; repository contents are not read here.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
