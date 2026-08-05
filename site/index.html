@@ -32,9 +32,16 @@ limitations under the License.
       <h2>What is this?</h2>
       <p>
         This site is the home of <strong>Google's transparency log witness
-        programme</strong>. It publishes the log origins that Google makes
-        available for witness cosigning, and coordinates the witness
-        configurations used by log operators and verifiers.
+        programme</strong>: the witnesses that cosign checkpoints for
+        Google-operated transparency logs, and the configuration that log
+        operators and verifiers use to interoperate with them.
+      </p>
+      <p>
+        Witnesses taking part <strong>make a service availability commitment
+        to Google</strong>. The availability of Google's transparency logs
+        depends on these cosignatures, so participation means undertaking to
+        meet an agreed level of service, rather than cosigning on a
+        best-effort basis.
       </p>
       <p>
         The canonical source of truth is the
@@ -43,9 +50,8 @@ limitations under the License.
       </p>
       <ul>
         <li>
-          <strong>Log lists</strong> &mdash; the set of Google-operated
-          transparency log origins published for witness discovery, following
-          the
+          <strong>Log lists</strong> &mdash; the Google-operated transparency
+          log origins that participating witnesses cosign, following the
           <a href="https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md">log-list format</a>.
         </li>
         <li>
@@ -61,10 +67,39 @@ limitations under the License.
     </section>
 
     <section>
+      <h2>Relationship to the Public Witness Network</h2>
+      <div class="callout">
+        <p>
+          This programme is <strong>separate from</strong> the
+          <a href="https://witness-network.org/">Public Witness Network</a>.
+        </p>
+      </div>
+      <p>
+        The log list published here is not an open invitation to begin
+        cosigning Google's logs, and membership of the Public Witness Network
+        does not make a witness eligible for this programme. Witnesses are
+        onboarded only by agreement with Google, given the availability
+        commitment described above.
+      </p>
+      <p>
+        Equally, this is not a route into the Public Witness Network. If you
+        would like to witness transparency logs on a best-effort, community
+        basis, then
+        <a href="https://witness-network.org/participate">participate there</a>
+        directly.
+      </p>
+    </section>
+
+    <section>
       <h2>Log list</h2>
       <p>
-        The combined log list for witnesses is available at:<br>
+        The combined log list for participating witnesses is available at:<br>
         <code><a href="log-list-10qps-10klogs.txt">log-list-10qps-10klogs.txt</a></code>
+      </p>
+      <p>
+        The name states the service envelope the list is bounded by: at most
+        <strong>10,000 logs</strong>, which together may send at most
+        <strong>10 cosignature requests per second</strong> to a witness.
       </p>
       <p>
         This file is rebuilt from the repo on every commit to
@@ -80,8 +115,16 @@ limitations under the License.
     <section>
       <h2>Getting involved</h2>
       <p>
-        To add or update a witness, create or edit a file under
-        <code>witnesses/</code> and submit a pull request. See the
+        Witness operators join this programme by agreement with Google, rather
+        than by open enrolment. If you operate a witness and are interested in
+        taking part, please
+        <a href="https://github.com/google/google-tlog-witness/issues/new">open an issue</a>
+        to start the conversation.
+      </p>
+      <p>
+        Once an agreement is in place, endpoints and keys are managed in the
+        repository: create or edit your file under <code>witnesses/</code> and
+        submit a pull request for review. See the
         <a href="https://github.com/google/google-tlog-witness#for-witness-operators">README</a>
         for details on the witness file format.
       </p>
