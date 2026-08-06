@@ -32,10 +32,10 @@ def concatenated_log_list(name, srcs, visibility = None):
         name = name,
         srcs = srcs,
         outs = [name + ".txt"],
-        cmd = "$(location //tools:gen_log_list) " +
+        cmd = "$(location //tools/gen_log_list) " +
               " ".join(["--input=$(location %s)" % s for s in srcs]) +
               " --output=$@",
-        tools = ["//tools:gen_log_list"],
+        tools = ["//tools/gen_log_list"],
         visibility = visibility,
     )
 
@@ -64,7 +64,7 @@ def tlog_policy(name, log_lists, witnesses, quorum, groups = [], visibility = No
             "ring-any-bells" or "none".
         visibility: Standard Bazel visibility.
     """
-    cmd_parts = ["$(location //tools:gen_tlog_policy)"]
+    cmd_parts = ["$(location //tools/gen_tlog_policy)"]
     for log_list in log_lists:
         cmd_parts.append("--log-list=$(location %s)" % log_list)
     for witness in witnesses:
@@ -79,7 +79,7 @@ def tlog_policy(name, log_lists, witnesses, quorum, groups = [], visibility = No
         srcs = log_lists + witnesses,
         outs = [name + ".policy"],
         cmd = " ".join(cmd_parts),
-        tools = ["//tools:gen_tlog_policy"],
+        tools = ["//tools/gen_tlog_policy"],
         visibility = visibility,
     )
 
