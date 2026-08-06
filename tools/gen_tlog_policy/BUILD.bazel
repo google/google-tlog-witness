@@ -12,21 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO: rearrange files so gazelle doesn't need to ignore this directory.
-# gazelle:ignore
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
-load("@rules_go//go:def.bzl", "go_binary")
-
-go_binary(
-    name = "gen_log_list",
-    srcs = ["gen_log_list.go"],
-    visibility = ["//:__subpackages__"],
+go_library(
+    name = "gen_tlog_policy_lib",
+    srcs = ["gen_tlog_policy.go"],
+    importpath = "github.com/google/google-tlog-witness/tools/gen_tlog_policy",
+    visibility = ["//visibility:private"],
     deps = ["//internal/flagutil"],
 )
 
 go_binary(
     name = "gen_tlog_policy",
-    srcs = ["gen_tlog_policy.go"],
-    visibility = ["//:__subpackages__"],
-    deps = ["//internal/flagutil"],
+    embed = [":gen_tlog_policy_lib"],
+    visibility = ["//visibility:public"],
 )
