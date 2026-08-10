@@ -25,5 +25,7 @@ go_library(
 go_binary(
     name = "gen_log_list",
     embed = [":gen_log_list_lib"],
-    visibility = ["//visibility:public"],
+    # Only used by the log-list genrules in this repository; not part of the
+    # public API.
+    visibility = ["//:__subpackages__"],
 )
