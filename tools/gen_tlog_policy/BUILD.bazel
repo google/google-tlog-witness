@@ -25,5 +25,7 @@ go_library(
 go_binary(
     name = "gen_tlog_policy",
     embed = [":gen_tlog_policy_lib"],
-    visibility = ["//visibility:public"],
+    # Only used by the tlog-policy genrules in this repository; not part of
+    # the public API.
+    visibility = ["//:__subpackages__"],
 )
