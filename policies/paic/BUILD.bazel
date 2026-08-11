@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//build_defs:tlog.bzl", "tlog_policy_pair")
+load("//build_defs:tlog.bzl", "tlog_policy", "tlog_policy_pair")
 
 # Production log and verifier policies.
 tlog_policy_pair(
@@ -32,6 +32,31 @@ tlog_policy_pair(
     name = "dev",
     groups = ["group tf-and-glasklar all tf glasklar"],
     log_lists = ["//logs/paic:log-list-dev.txt"],
+    quorum = "tf-and-glasklar",
+    visibility = ["//visibility:public"],
+    witnesses = [
+        "//witnesses:transparency-dev.txt",
+        "//witnesses:glasklar.txt",
+    ],
+)
+
+# Verifier policy trusting both the development and production logs.
+#
+# This is a verifier policy only: nothing appends to a combined "dev and prod"
+# log, so there is no corresponding log policy and no tlog_policy_pair.
+#
+# It exists for non-production relying parties, which see a mixture of
+# evidence.
+#
+# Production relying parties must NOT use this policy: they should trust the
+# production log alone, via ":prod-verifier".
+tlog_policy(
+    name = "dev-prod-verifier",
+    groups = ["group tf-and-glasklar all tf glasklar"],
+    log_lists = [
+        "//logs/paic:log-list.txt",
+        "//logs/paic:log-list-dev.txt",
+    ],
     quorum = "tf-and-glasklar",
     visibility = ["//visibility:public"],
     witnesses = [
