@@ -17,9 +17,9 @@ load("//build_defs:tlog.bzl", "tlog_policy", "tlog_policy_pair")
 # Production log and verifier policies.
 tlog_policy_pair(
     name = "prod",
-    groups = ["group tf-and-glasklar all tf glasklar"],
+    groups = ["group tf-geomys-glasklar all tf geomys glasklar"],
     log_lists = ["//logs/paic:log-list.txt"],
-    quorum = "tf-and-glasklar",
+    quorum = "tf-geomys-glasklar",
     visibility = ["//visibility:public"],
     witnesses = [
         "//witnesses:transparency-dev.txt",
@@ -54,15 +54,16 @@ tlog_policy_pair(
 # production log alone, via ":prod-verifier".
 tlog_policy(
     name = "dev-prod-verifier",
-    groups = ["group tf-and-glasklar all tf glasklar"],
+    groups = ["group tf-geomys-glasklar all tf geomys glasklar"],
     log_lists = [
         "//logs/paic:log-list.txt",
         "//logs/paic:log-list-dev.txt",
     ],
-    quorum = "tf-and-glasklar",
+    quorum = "tf-geomys-glasklar",
     visibility = ["//visibility:public"],
     witnesses = [
         "//witnesses:transparency-dev.txt",
+        "//witnesses:geomys.txt",
         "//witnesses:glasklar.txt",
     ],
 )
