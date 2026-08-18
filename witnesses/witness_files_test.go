@@ -95,9 +95,9 @@ func validateWitnessFile(path string) []string {
 				definedNames[name] = true
 			}
 
-			// Validate vkey format: <origin>+<keyid>+<base64key>.
+			// Validate vkey format and witness key type.
 			if vkeyStr != "" {
-				if vkeyErrs, _ := vkey.Validate(vkeyStr, lineNum); len(vkeyErrs) > 0 {
+				if vkeyErrs, _ := vkey.ValidateWitness(vkeyStr, lineNum); len(vkeyErrs) > 0 {
 					errs = append(errs, vkeyErrs...)
 				}
 			}
