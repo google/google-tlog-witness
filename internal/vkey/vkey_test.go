@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package vkey
+package vkey_test
 
 import (
 	"encoding/base64"
 	"strings"
 	"testing"
+
+	"github.com/google/google-tlog-witness/internal/vkey"
 )
 
 // synthVkey builds a vkey with the given algorithm byte and a fixed 32-byte
@@ -53,7 +55,7 @@ func TestValidateWitnessKeyType(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			errs, _ := ValidateWitness(tc.vkey, 1)
+			errs, _ := vkey.ValidateWitness(tc.vkey, 1)
 			if got := len(errs) > 0; got != tc.wantErr {
 				t.Errorf("ValidateWitness(%q) errors = %v, want error: %v", tc.vkey, errs, tc.wantErr)
 			}
@@ -69,7 +71,7 @@ func TestValidateWitnessKeyType(t *testing.T) {
 func TestValidateAcceptsNonCosignatureKeyTypes(t *testing.T) {
 	for _, alg := range []byte{0x01, 0x02, 0x04, 0x06} {
 		v := synthVkey("log.example.com", alg)
-		if errs, _ := Validate(v, 1); len(errs) > 0 {
+		if errs, _ := vkey.Validate(v, 1); len(errs) > 0 {
 			t.Errorf("Validate(%q) with alg 0x%02x = %v, want no errors", v, alg, errs)
 		}
 	}
@@ -78,7 +80,7 @@ func TestValidateAcceptsNonCosignatureKeyTypes(t *testing.T) {
 // A structurally invalid vkey should report the structural problem and not
 // also emit a key type error.
 func TestValidateWitnessStructuralErrorsOnly(t *testing.T) {
-	errs, _ := ValidateWitness("no-separators-here", 1)
+	errs, _ := vkey.ValidateWitness("no-separators-here", 1)
 	if len(errs) != 1 {
 		t.Fatalf("ValidateWitness() = %v, want exactly one structural error", errs)
 	}
