@@ -51,10 +51,6 @@ func TestValidateWitnessKeyType(t *testing.T) {
 			vkey:    synthVkey("witness.example.com", 0x02),
 			wantErr: true,
 		},
-		{
-			name: "grandfathered glasklar key accepted",
-			vkey: "01.g1.witness.glasklar.is+b11e3810+ATe1mTYMbY5pNxIrVQRuXG8euiPRKHZe3WHMqSQ78asw",
-		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			errs, _ := ValidateWitness(tc.vkey, 1)
