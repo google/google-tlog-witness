@@ -74,3 +74,80 @@ func Validate(vkey string, lineNum int) (errs []string, origin string) {
 
 	return errs, origin
 }
+
+// Witness cosignature algorithm bytes, per
+// https://c2sp.org/tlog-cosignature: a witness key is a vkey whose signature
+// type is 0x04 (Ed25519 cosignature/v1) or 0x06 (ML-DSA-44). The key ID is
+// derived from that byte, so a witness advertised under any other type
+// produces a key ID that will never match the signature lines it emits, and
+// verifiers silently ignore those lines.
+const (
+	algEd25519Cosignature = 0x04
+	algMLDSA44            = 0x06
+)
+
+// grandfatheredWitnessKeys are witness vkeys that predate this check and are
+// published upstream with a non-cosignature algorithm byte. They are keyed by
+// the exact vkey string, so rotating any of them forces compliance.
+//
+// The Glasklar g1 group publishes its keys as plain Ed25519 (0x01) vkeys at
+// https://git.glasklar.is/glasklar/services/witnessing/-/blob/main/g1.witness.glasklar.is/about.md
+// rather than as 0x04 cosignature vkeys. Remove these entries once upstream
+// republishes them.
+var grandfatheredWitnessKeys = map[string]bool{
+	"01.g1.witness.glasklar.is+b11e3810+ATe1mTYMbY5pNxIrVQRuXG8euiPRKHZe3WHMqSQ78asw": true,
+	"02.g1.witness.glasklar.is+d62e5f3b+AeGLhNYlJ/C8gjPtFHdqYT+uqZ/eBj7JIwGdguZUo7WS": true,
+	"03.g1.witness.glasklar.is+9331a7c0+ASFcxTWdOgeWGcbpUf8tSZKAVYeO9+a0wJOV0bv2S2ik": true,
+}
+
+// decodeKey returns the raw bytes of the base64 key part of a vkey, trying the
+// same encodings Validate accepts.
+func decodeKey(keyBase64 string) ([]byte, bool) {
+	for _, enc := range []*base64.Encoding{
+		base64.StdEncoding,
+		base64.RawStdEncoding,
+		base64.URLEncoding,
+		base64.RawURLEncoding,
+	} {
+		if b, err := enc.DecodeString(keyBase64); err == nil {
+			return b, true
+		}
+	}
+	return nil, false
+}
+
+// ValidateWitness checks everything Validate checks, and additionally requires
+// that the key use a cosignature algorithm byte. Use it for witness lines;
+// log lines legitimately use other key types and must use Validate instead.
+//
+// Returns a list of human-readable error strings (one per violation) and the
+// extracted origin (empty on structural parse failure).
+func ValidateWitness(vkey string, lineNum int) (errs []string, origin string) {
+	errs, origin = Validate(vkey, lineNum)
+	if len(errs) > 0 {
+		// Structural problems already reported; the key type check below
+		// would only add noise.
+		return errs, origin
+	}
+	if grandfatheredWitnessKeys[vkey] {
+		return errs, origin
+	}
+
+	// Validate has already established that there are two '+' separators, so
+	// SplitN yields origin, key ID and the base64 key (which may itself
+	// contain '+').
+	parts := strings.SplitN(vkey, "+", 3)
+	key, ok := decodeKey(parts[2])
+	if !ok || len(key) == 0 {
+		// Validate already accepted the base64, so this should be
+		// unreachable; report rather than panic on an empty key.
+		errs = append(errs, fmt.Sprintf("line %d: vkey %q has an undecodable or empty key", lineNum, vkey))
+		return errs, origin
+	}
+	if key[0] != algEd25519Cosignature && key[0] != algMLDSA44 {
+		errs = append(errs, fmt.Sprintf(
+			"line %d: witness vkey %q has signature type 0x%02x; witness keys must use a cosignature type (0x%02x Ed25519 or 0x%02x ML-DSA-44), see https://c2sp.org/tlog-cosignature",
+			lineNum, vkey, key[0], algEd25519Cosignature, algMLDSA44))
+	}
+	return errs, origin
+}

@@ -122,8 +122,8 @@ func validateTlogPolicyFile(path string) []string {
 				definedNames[name] = true
 			}
 
-			// Validate vkey format.
-			if vkeyErrs, _ := vkey.Validate(vkeyStr, lineNum); len(vkeyErrs) > 0 {
+			// Validate vkey format and witness key type.
+			if vkeyErrs, _ := vkey.ValidateWitness(vkeyStr, lineNum); len(vkeyErrs) > 0 {
 				errs = append(errs, vkeyErrs...)
 			}
 
