@@ -86,20 +86,6 @@ const (
 	algMLDSA44            = 0x06
 )
 
-// grandfatheredWitnessKeys are witness vkeys that predate this check and are
-// published upstream with a non-cosignature algorithm byte. They are keyed by
-// the exact vkey string, so rotating any of them forces compliance.
-//
-// The Glasklar g1 group publishes its keys as plain Ed25519 (0x01) vkeys at
-// https://git.glasklar.is/glasklar/services/witnessing/-/blob/main/g1.witness.glasklar.is/about.md
-// rather than as 0x04 cosignature vkeys. Remove these entries once upstream
-// republishes them.
-var grandfatheredWitnessKeys = map[string]bool{
-	"01.g1.witness.glasklar.is+b11e3810+ATe1mTYMbY5pNxIrVQRuXG8euiPRKHZe3WHMqSQ78asw": true,
-	"02.g1.witness.glasklar.is+d62e5f3b+AeGLhNYlJ/C8gjPtFHdqYT+uqZ/eBj7JIwGdguZUo7WS": true,
-	"03.g1.witness.glasklar.is+9331a7c0+ASFcxTWdOgeWGcbpUf8tSZKAVYeO9+a0wJOV0bv2S2ik": true,
-}
-
 // decodeKey returns the raw bytes of the base64 key part of a vkey, trying the
 // same encodings Validate accepts.
 func decodeKey(keyBase64 string) ([]byte, bool) {
@@ -127,9 +113,6 @@ func ValidateWitness(vkey string, lineNum int) (errs []string, origin string) {
 	if len(errs) > 0 {
 		// Structural problems already reported; the key type check below
 		// would only add noise.
-		return errs, origin
-	}
-	if grandfatheredWitnessKeys[vkey] {
 		return errs, origin
 	}
 
