@@ -39,8 +39,8 @@ go_test(
         "implies_test.go",
         "proof_test.go",
     ],
-    embed = [":policycheck"],
     deps = [
+        ":policycheck",
         "@com_github_transparency_dev_formats//note",
         "@com_github_transparency_dev_formats//policy",
         "@com_github_transparency_dev_formats//proof",
