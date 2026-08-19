@@ -17,6 +17,7 @@ package policycheck
 import (
 	"fmt"
 	"math/bits"
+	"os"
 	"sort"
 	"strings"
 
@@ -184,4 +185,34 @@ func union(a, b []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// ImpliesFiles is [Implies] over a pair of policy files on disk.
+//
+// It exists so that callers which only want the file-level check — the
+// generated policy-pair tests, in particular — need not depend on the policy
+// parser themselves.
+func ImpliesFiles(logPath, verifierPath string) error {
+	log, err := loadPolicy(logPath)
+	if err != nil {
+		return err
+	}
+	verifier, err := loadPolicy(verifierPath)
+	if err != nil {
+		return err
+	}
+	return Implies(log, verifier)
+}
+
+// loadPolicy reads and parses a tlog-policy file.
+func loadPolicy(path string) (*policy.TLogPolicy, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %v", path, err)
+	}
+	p := &policy.TLogPolicy{}
+	if err := p.Unmarshal(b); err != nil {
+		return nil, fmt.Errorf("parsing %s: %v", path, err)
+	}
+	return p, nil
 }

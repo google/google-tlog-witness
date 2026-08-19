@@ -33,21 +33,7 @@ import (
 	"testing"
 
 	"github.com/google/google-tlog-witness/policycheck"
-	"github.com/transparency-dev/formats/policy"
 )
-
-func load(t *testing.T, path string) *policy.TLogPolicy {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("cannot read %s: %v", path, err)
-	}
-	p := &policy.TLogPolicy{}
-	if err := p.Unmarshal(b); err != nil {
-		t.Fatalf("cannot parse %s: %v", path, err)
-	}
-	return p
-}
 
 // TestPolicyPairs checks each <name>-log.policy against its matching
 // <name>-verifier.policy.
@@ -68,7 +54,7 @@ func TestPolicyPairs(t *testing.T) {
 			if _, err := os.Stat(verifierPath); err != nil {
 				t.Fatalf("no verifier policy alongside %s: %v", logPath, err)
 			}
-			if err := policycheck.Implies(load(t, logPath), load(t, verifierPath)); err != nil {
+			if err := policycheck.ImpliesFiles(logPath, verifierPath); err != nil {
 				t.Errorf("%s does not imply %s: %v", logPath, verifierPath, err)
 			}
 		})

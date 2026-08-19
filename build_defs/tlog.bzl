@@ -159,10 +159,7 @@ def tlog_policy_pair_test(name, srcs, **kwargs):
         name = name,
         srcs = ["//build_defs:policy_pair_files_test.go"],
         data = srcs,
-        deps = [
-            "//policycheck",
-            "@com_github_transparency_dev_formats//policy",
-        ],
+        deps = ["//policycheck"],
         **kwargs
     )
 
