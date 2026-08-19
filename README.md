@@ -1,5 +1,7 @@
 # google-tlog-witness
 
+TEST
+
 This repository is the canonical source of truth for Google's transparency log
 witness interactions. It contains:
 
