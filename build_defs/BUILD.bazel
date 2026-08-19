@@ -19,8 +19,10 @@
 # which compile them in the consuming package alongside its data files.
 # gazelle:exclude log_list_files_test.go
 # gazelle:exclude tlog_policy_files_test.go
+# gazelle:exclude policy_pair_files_test.go
 
 exports_files([
     "log_list_files_test.go",
     "tlog_policy_files_test.go",
+    "policy_pair_files_test.go",
 ])

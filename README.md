@@ -155,6 +155,19 @@ remove the old key.
 is an operational detail used by the log to contact the witness. Verifier
 policies are unaffected because they identify witnesses by key, not by URL.
 
+Half of the core invariant — that a verifier never demands a cosignature the
+log cannot produce — is enforced mechanically. Every `tlog_policy_pair()`
+emits a `<name>.policy-pair-test` target which fails if there is any set of
+witnesses that satisfies the log quorum but not the verifier quorum. Getting
+the order of the steps above wrong therefore breaks the build rather than
+production.
+
+Note what this does *not* cover: offline data already in circulation. A
+`tlog-proof` produced under an older policy is unaffected by the change here,
+so step 3 must still wait for those to be re-logged. Relying parties should
+check their own corpora against the candidate verifier policy; the
+`policycheck` package exposes `CheckProof` for exactly that.
+
 ## Building
 
 This repository uses [Bazel](https://bazel.build/). Build all targets:
@@ -175,8 +188,13 @@ The Bazel macros in `build_defs/tlog.bzl` provide:
   groups=[])` — generates a matched pair of log and verifier tlog-policy files
   from shared inputs, via two `tlog_policy()` targets named `<name>-log` and
   `<name>-verifier`. An optional `verifier_quorum` allows the verifier quorum to
-  diverge temporarily during a policy rollout.
+  diverge temporarily during a policy rollout. It also creates a
+  `<name>.policy-pair-test` target asserting the divergence is in the safe
+  direction.
 - `log_list_test(name, srcs)` — validates log-list files against the logs/v0
   format.
 - `tlog_policy_test(name, srcs)` — validates tlog-policy files against the
   [C2SP spec](https://c2sp.org/tlog-policy).
+- `tlog_policy_pair_test(name, srcs)` — checks that each `<name>-log.policy` in
+  `srcs` is no stricter than its matching `<name>-verifier.policy`.
+

@@ -131,6 +131,41 @@ def tlog_policy_pair(name, log_lists, witnesses, quorum, verifier_quorum = None,
         visibility = visibility,
     )
 
+    tlog_policy_pair_test(
+        name = name + ".policy-pair-test",
+        srcs = [
+            name + "-log.policy",
+            name + "-verifier.policy",
+        ],
+    )
+
+def tlog_policy_pair_test(name, srcs, **kwargs):
+    """Checks that log policies are never stricter than their verifier policies.
+
+    Creates a go_test target that pairs each <name>-log.policy in srcs with the
+    matching <name>-verifier.policy and asserts that every set of cosigning
+    witnesses satisfying the log policy also satisfies the verifier policy.
+
+    A verifier policy stricter than its log policy is an outage: the log will
+    happily emit tlog-proofs that no relying party can verify.
+
+    Args:
+        name: Target name for the test.
+        srcs: List of tlog-policy file labels (typically genrule outputs),
+            containing matched -log/-verifier pairs.
+        **kwargs: Additional arguments passed to go_test (e.g. tags, size).
+    """
+    go_test(
+        name = name,
+        srcs = ["//build_defs:policy_pair_files_test.go"],
+        data = srcs,
+        deps = [
+            "//policycheck",
+            "@com_github_transparency_dev_formats//policy",
+        ],
+        **kwargs
+    )
+
 def log_list_test(name, srcs, **kwargs):
     """Validates log-list files against the logs/v0 format.
 
