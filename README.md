@@ -198,8 +198,9 @@ The Bazel macros in `build_defs/tlog.bzl` provide:
 - `tlog_policy_pair_test(name, log_policy, verifier_policy)` — checks that
   `log_policy` is no stricter than `verifier_policy`. Instantiate it once per
   pair.
-- `tlog_proof_test(name, policy, proofs)` — checks that `policy` accepts a
-  corpus of already-issued tlog-proofs. Relying parties can point this at the
-  proofs they have shipped, so that tightening a policy fails the build rather
-  than breaking verification in the field. Empty proof files are skipped.
+- `tlog_proof_test(name, policy, proofs, allow_empty_proofs=False)` — checks
+  that `policy` accepts a corpus of already-issued tlog-proofs. Relying parties
+  can point this at the proofs they have shipped, so that tightening a policy
+  fails the build rather than breaking verification in the field. An empty
+  proof file fails the test unless `allow_empty_proofs` is set.
 

@@ -32,8 +32,11 @@ import (
 // not to publish to a transparency log at all, or to tolerate a publishing
 // failure rather than fail the release. Either way the absence of a proof
 // was a decision made by whoever produced the artefact, and is not something
-// a policy check can or should adjudicate. Callers are expected to skip
-// these rather than treat them as failures.
+// a policy check can adjudicate.
+//
+// It is distinguished from other failures so that callers who expect empty
+// proofs can tolerate them. That should be a deliberate choice: a corpus
+// quietly filling up with empty files would make a policy check vacuous.
 var ErrEmptyProof = errors.New("proof is empty")
 
 // Result describes the outcome of evaluating one tlog-proof against one

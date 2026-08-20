@@ -34,11 +34,12 @@ exports_files([
 # Smoke test for the tlog_proof_test macro.
 #
 # The corpus is a single empty proof, so what this exercises is the wiring —
-# policy loading, argument passing, path resolution and the empty-proof skip —
-# rather than verification itself. Checking a real proof would require a real
-# signed checkpoint, which cannot be minted at build time.
+# policy loading, argument passing, path resolution and the empty-proof
+# handling — rather than verification itself. Checking a real proof would
+# require a real signed checkpoint, which cannot be minted at build time.
 tlog_proof_test(
     name = "tlog_proof_test_smoke_test",
+    allow_empty_proofs = True,
     policy = "//policies/paic:prod-verifier.policy",
     proofs = glob(["testdata/*.tlog_proof"]),
 )

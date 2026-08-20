@@ -164,7 +164,7 @@ def tlog_policy_pair_test(name, log_policy, verifier_policy, **kwargs):
         **kwargs
     )
 
-def tlog_proof_test(name, policy, proofs, **kwargs):
+def tlog_proof_test(name, policy, proofs, allow_empty_proofs = False, **kwargs):
     """Checks that a tlog-policy accepts a corpus of existing tlog-proofs.
 
     Creates a go_test target that evaluates each file in proofs the way a
@@ -176,23 +176,25 @@ def tlog_proof_test(name, policy, proofs, **kwargs):
     beyond what those proofs carry fails the build instead of breaking
     verification in the field.
 
-    Empty proof files are skipped, not failed: an empty proof records a
-    decision by whoever produced the artefact, either not to log it or to
-    tolerate a logging failure.
-
     Args:
         name: Target name for the test.
         policy: Label of the tlog-policy file to check against.
         proofs: List of tlog-proof file labels, each naming a single file —
             typically a glob. Each is passed as its own --proof flag, so a
             label expanding to several files will not work here.
+        allow_empty_proofs: Skip empty proof files rather than failing on
+            them. An empty proof records a decision not to log an artefact,
+            or to tolerate a logging failure, so it cannot be checked against
+            a policy — but a corpus quietly filling up with empty files would
+            make this test vacuous, so tolerating them is opt-in.
         **kwargs: Additional arguments passed to go_test (e.g. tags, size).
     """
     go_test(
         name = name,
         srcs = ["//build_defs:tlog_proof_test.go"],
         args = ["--policy=$(rootpath %s)" % policy] +
-               ["--proof=$(rootpath %s)" % p for p in proofs],
+               ["--proof=$(rootpath %s)" % p for p in proofs] +
+               (["--allow_empty_proofs"] if allow_empty_proofs else []),
         data = [policy] + proofs,
         deps = ["//policycheck"],
         **kwargs

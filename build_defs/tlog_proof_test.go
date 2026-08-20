@@ -57,6 +57,10 @@ func (s *stringSlice) Set(v string) error {
 var (
 	policyPath = flag.String("policy", "",
 		"Path to the tlog-policy file to check the proofs against.")
+	allowEmptyProofs = flag.Bool("allow_empty_proofs", false,
+		"Skip empty proof files instead of failing on them. Only set this "+
+			"if producing an empty proof is a deliberate, permitted outcome "+
+			"in the pipeline that generated this corpus.")
 	proofPaths stringSlice
 )
 
@@ -111,8 +115,15 @@ func TestProofs(t *testing.T) {
 		t.Run(proofPaths[i], func(t *testing.T) {
 			if errors.Is(r.Err, policycheck.ErrEmptyProof) {
 				// An empty proof means whoever produced the artefact chose
-				// not to log it, or chose to tolerate a logging failure.
-				// That is not something a policy check can adjudicate.
+				// not to log it, or chose to tolerate a logging failure. That
+				// is not something a policy check can adjudicate — but it is
+				// also not something to wave through silently, since a corpus
+				// quietly filling up with empty files would make this whole
+				// test vacuous.
+				if !*allowEmptyProofs {
+					t.Fatal("proof is empty, so nothing was checked; " +
+						"set --allow_empty_proofs if that is expected here")
+				}
 				skipped++
 				t.Skip("proof is empty")
 			}
