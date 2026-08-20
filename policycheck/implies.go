@@ -26,13 +26,13 @@ import (
 
 // maxWitnessUniverse bounds the exhaustive search performed by Implies.
 //
-// Implies enumerates every subset of the combined witness set, so its cost
+// Implies enumerates every subset of the log policy's witnesses, so its cost
 // is 2^n. Twenty witnesses is a little over a million subsets, which takes
 // well under a second; beyond that the check would become a build-time
 // hazard, so it fails loudly rather than silently taking a long time.
 //
-// Real policies are far smaller than this: the PAIC policies in this
-// repository declare six witnesses.
+// Real policies are far smaller than this: a handful of witnesses is
+// typical.
 const maxWitnessUniverse = 20
 
 // UnsafeQuorumError reports a witness set that the log policy considers
@@ -41,15 +41,13 @@ const maxWitnessUniverse = 20
 // Its existence means the log is permitted to publish a checkpoint that a
 // conforming verifier would reject.
 type UnsafeQuorumError struct {
-	// Witnesses are the verifier keys of the witnesses in the offending
-	// set. It is a minimal such set: no proper subset of it satisfies the
-	// log quorum.
-	Witnesses []string
-	// Labels holds a short human-readable description of each entry in
-	// Witnesses, in the same order. Raw vkeys are unhelpful in a failure
-	// message — an ML-DSA-44 one is some 2,500 characters long — so
-	// Error() reports these instead.
-	Labels []string
+	// Witnesses maps the verifier key of each witness in the offending set
+	// to a short human-readable label for it. Raw vkeys are unhelpful in a
+	// failure message — an ML-DSA-44 one is some 2,500 characters long — so
+	// Error() reports the labels instead.
+	//
+	// The set is minimal: no proper subset of it satisfies the log quorum.
+	Witnesses map[string]string
 	// LogQuorum and VerifierQuorum are the quorum names of the two
 	// policies, included to make failures self-describing.
 	LogQuorum      string
@@ -65,8 +63,13 @@ func (e *UnsafeQuorumError) Error() string {
 			"which the verifier would reject")
 		return b.String()
 	}
+	labels := make([]string, 0, len(e.Witnesses))
+	for _, l := range e.Witnesses {
+		labels = append(labels, l)
+	}
+	sort.Strings(labels)
 	fmt.Fprintf(&b, "the log may publish a checkpoint cosigned only by [%s], "+
-		"which the verifier would reject", strings.Join(e.Labels, ", "))
+		"which the verifier would reject", strings.Join(labels, ", "))
 	return b.String()
 }
 
@@ -105,9 +108,14 @@ func label(p *policy.TLogPolicy, vkey string) string {
 // problem.
 //
 // The check is exhaustive rather than heuristic. Quorum rules are monotone
-// boolean functions over the witness set, so it is sound to enumerate
-// subsets of the union of both policies' witnesses; every relevant
-// distinction is captured by which of those keys are present.
+// boolean functions over the witness set, so every relevant distinction is
+// captured by which witnesses are present.
+//
+// Only the log policy's witnesses are enumerated. A key the log does not
+// declare cannot appear on a checkpoint the log produces, and adding one to
+// a witness set could only make the verifier more willing to accept — so no
+// counterexample is missed, and every minimal counterexample is a subset of
+// the log's own witnesses.
 //
 // Note the direction: a verifier quorum that is *weaker* than the log quorum
 // is fine, and is exactly the intermediate state the rollout procedure in
@@ -117,7 +125,7 @@ func label(p *policy.TLogPolicy, vkey string) string {
 // checkpoint is signed by a trusted log is orthogonal to the quorum
 // relationship being checked here.
 func Implies(log, verifier *policy.TLogPolicy) error {
-	universe := union(vkeys(log), vkeys(verifier))
+	universe := vkeys(log)
 	if len(universe) > maxWitnessUniverse {
 		return fmt.Errorf("cannot check %d witnesses exhaustively (limit %d): "+
 			"the number of subsets to consider is 2^n",
@@ -150,41 +158,15 @@ func Implies(log, verifier *policy.TLogPolicy) error {
 	if best < 0 {
 		return nil
 	}
-	labels := make([]string, len(bestSet))
-	for i, k := range bestSet {
-		// A key may be declared by only one of the two policies — indeed
-		// that is itself a common cause of failure here — so fall back to
-		// the verifier's naming if the log does not know the key.
-		if l := label(log, k); strings.Contains(l, " (") {
-			labels[i] = l
-		} else {
-			labels[i] = label(verifier, k)
-		}
+	witnesses := make(map[string]string, len(bestSet))
+	for _, k := range bestSet {
+		witnesses[k] = label(log, k)
 	}
 	return &UnsafeQuorumError{
-		Witnesses:      bestSet,
-		Labels:         labels,
+		Witnesses:      witnesses,
 		LogQuorum:      log.Quorum,
 		VerifierQuorum: verifier.Quorum,
 	}
-}
-
-// union returns the sorted, deduplicated union of the given key slices.
-// Sorting keeps subset enumeration, and therefore error messages, stable.
-func union(a, b []string) []string {
-	seen := make(map[string]bool, len(a)+len(b))
-	for _, s := range a {
-		seen[s] = true
-	}
-	for _, s := range b {
-		seen[s] = true
-	}
-	out := make([]string, 0, len(seen))
-	for s := range seen {
-		out = append(out, s)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // ImpliesFiles is [Implies] over a pair of policy files on disk.

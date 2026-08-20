@@ -133,32 +133,67 @@ def tlog_policy_pair(name, log_lists, witnesses, quorum, verifier_quorum = None,
 
     tlog_policy_pair_test(
         name = name + ".policy-pair-test",
-        srcs = [
-            name + "-log.policy",
-            name + "-verifier.policy",
-        ],
+        log_policy = name + "-log.policy",
+        verifier_policy = name + "-verifier.policy",
     )
 
-def tlog_policy_pair_test(name, srcs, **kwargs):
-    """Checks that log policies are never stricter than their verifier policies.
+def tlog_policy_pair_test(name, log_policy, verifier_policy, **kwargs):
+    """Checks that a log policy is never stricter than its verifier policy.
 
-    Creates a go_test target that pairs each <name>-log.policy in srcs with the
-    matching <name>-verifier.policy and asserts that every set of cosigning
-    witnesses satisfying the log policy also satisfies the verifier policy.
+    Creates a go_test target that asserts every set of cosigning witnesses
+    satisfying log_policy also satisfies verifier_policy.
 
     A verifier policy stricter than its log policy is an outage: the log will
     happily emit tlog-proofs that no relying party can verify.
 
     Args:
         name: Target name for the test.
-        srcs: List of tlog-policy file labels (typically genrule outputs),
-            containing matched -log/-verifier pairs.
+        log_policy: Label of the log tlog-policy file.
+        verifier_policy: Label of the verifier tlog-policy file.
         **kwargs: Additional arguments passed to go_test (e.g. tags, size).
     """
     go_test(
         name = name,
-        srcs = ["//build_defs:policy_pair_files_test.go"],
-        data = srcs,
+        srcs = ["//build_defs:policy_pair_test.go"],
+        args = [
+            "--log_policy=$(rootpath %s)" % log_policy,
+            "--verifier_policy=$(rootpath %s)" % verifier_policy,
+        ],
+        data = [log_policy, verifier_policy],
+        deps = ["//policycheck"],
+        **kwargs
+    )
+
+def tlog_proof_test(name, policy, proofs, **kwargs):
+    """Checks that a tlog-policy accepts a corpus of existing tlog-proofs.
+
+    Creates a go_test target that evaluates each file in proofs the way a
+    relying party would: the checkpoint must be signed by one of the policy's
+    logs and cosigned in accordance with its quorum rule.
+
+    This is the empirical counterpart to tlog_policy_pair_test. Point it at
+    the proofs you have already issued and shipped, and tightening the policy
+    beyond what those proofs carry fails the build instead of breaking
+    verification in the field.
+
+    Empty proof files are skipped, not failed: an empty proof records a
+    decision by whoever produced the artefact, either not to log it or to
+    tolerate a logging failure.
+
+    Args:
+        name: Target name for the test.
+        policy: Label of the tlog-policy file to check against.
+        proofs: List of tlog-proof file labels, each naming a single file —
+            typically a glob. Each is passed as its own --proof flag, so a
+            label expanding to several files will not work here.
+        **kwargs: Additional arguments passed to go_test (e.g. tags, size).
+    """
+    go_test(
+        name = name,
+        srcs = ["//build_defs:tlog_proof_test.go"],
+        args = ["--policy=$(rootpath %s)" % policy] +
+               ["--proof=$(rootpath %s)" % p for p in proofs],
+        data = [policy] + proofs,
         deps = ["//policycheck"],
         **kwargs
     )

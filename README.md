@@ -165,8 +165,8 @@ production.
 Note what this does *not* cover: offline data already in circulation. A
 `tlog-proof` produced under an older policy is unaffected by the change here,
 so step 3 must still wait for those to be re-logged. Relying parties should
-check their own corpora against the candidate verifier policy; the
-`policycheck` package exposes `CheckProof` for exactly that.
+check their own corpora against the candidate verifier policy, using the
+`tlog_proof_test()` macro below or the `CheckProof` function it wraps.
 
 ## Building
 
@@ -195,6 +195,11 @@ The Bazel macros in `build_defs/tlog.bzl` provide:
   format.
 - `tlog_policy_test(name, srcs)` — validates tlog-policy files against the
   [C2SP spec](https://c2sp.org/tlog-policy).
-- `tlog_policy_pair_test(name, srcs)` — checks that each `<name>-log.policy` in
-  `srcs` is no stricter than its matching `<name>-verifier.policy`.
+- `tlog_policy_pair_test(name, log_policy, verifier_policy)` — checks that
+  `log_policy` is no stricter than `verifier_policy`. Instantiate it once per
+  pair.
+- `tlog_proof_test(name, policy, proofs)` — checks that `policy` accepts a
+  corpus of already-issued tlog-proofs. Relying parties can point this at the
+  proofs they have shipped, so that tightening a policy fails the build rather
+  than breaking verification in the field. Empty proof files are skipped.
 

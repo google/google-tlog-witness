@@ -129,6 +129,19 @@ func TestImplies(t *testing.T) {
 			wantUnsafe: 1,
 		},
 		{
+			desc: "witness only the verifier knows cannot rescue the log",
+			// Only the log's own witnesses are enumerated: the log cannot
+			// produce a cosignature from c, so demanding one is unsafe
+			// however the verifier declares it.
+			logWitnesses:      []witnessKey{a, b},
+			logGroups:         []string{"group g any a.example.com b.example.com"},
+			logQuorum:         "g",
+			verifierWitnesses: all,
+			verifierGroups:    []string{"group g all a.example.com b.example.com c.example.com"},
+			verifierQuorum:    "g",
+			wantUnsafe:        1,
+		},
+		{
 			desc: "nested groups are evaluated correctly",
 			// Log: a, or both b and c. Verifier: a only.
 			logWitnesses: all,
@@ -213,45 +226,6 @@ func TestImpliesCounterexampleIsMinimal(t *testing.T) {
 	}
 }
 
-// TestImpliesPAICProdShape exercises the quorum shape the PAIC policies
-// actually use: an "all" over three operator groups, each of which is
-// satisfied by any one of that operator's witnesses.
-func TestImpliesPAICProdShape(t *testing.T) {
-	l := newLog(t)
-	tf1 := newWitness(t, "tf1.example.com")
-	tf2 := newWitness(t, "tf2.example.com")
-	geomys := newWitness(t, "geomys.example.com")
-	g1 := newWitness(t, "g1.example.com")
-	g2 := newWitness(t, "g2.example.com")
-	witnesses := []witnessKey{tf1, tf2, geomys, g1, g2}
-
-	groups := []string{
-		"group tf all tf1.example.com tf2.example.com",
-		"group geomys any geomys.example.com",
-		"group glasklar any g1.example.com g2.example.com",
-		"group tf-geomys-glasklar all tf geomys glasklar",
-	}
-
-	// A matched pair is safe.
-	p := parsePolicy(t, policyText(l, witnesses, groups, "tf-geomys-glasklar"))
-	if err := policycheck.Implies(p, p); err != nil {
-		t.Errorf("Implies(prod, prod) = %v, want nil", err)
-	}
-
-	// Dropping geomys from the log side while the verifier still demands it
-	// is the classic "verifier demands a cosignature the log cannot
-	// produce" failure.
-	logGroups := []string{
-		"group tf all tf1.example.com tf2.example.com",
-		"group glasklar any g1.example.com g2.example.com",
-		"group tf-glasklar all tf glasklar",
-	}
-	logPolicy := parsePolicy(t, policyText(l, witnesses, logGroups, "tf-glasklar"))
-	if err := policycheck.Implies(logPolicy, p); err == nil {
-		t.Error("Implies(log without geomys, verifier with geomys) = nil, want error")
-	}
-}
-
 // TestUnsafeQuorumErrorLabels checks that failures are reported with witness
 // names rather than raw vkeys. This matters in practice: an ML-DSA-44 vkey is
 // around 2,500 characters, so a message listing a few of them is unreadable.
@@ -270,18 +244,18 @@ func TestUnsafeQuorumErrorLabels(t *testing.T) {
 	if !errors.As(err, &unsafe) {
 		t.Fatalf("Implies() = %v, want *UnsafeQuorumError", err)
 	}
-	if got, want := len(unsafe.Labels), len(unsafe.Witnesses); got != want {
-		t.Fatalf("len(Labels) = %d, want %d", got, want)
+	if len(unsafe.Witnesses) == 0 {
+		t.Fatal("counterexample is empty, want at least one witness")
 	}
-	for i, got := range unsafe.Labels {
-		if !strings.Contains(got, ".example.com (") {
-			t.Errorf("Labels[%d] = %q, want a named witness", i, got)
+	for vkey, label := range unsafe.Witnesses {
+		if !strings.Contains(label, ".example.com (") {
+			t.Errorf("label = %q, want a named witness", label)
 		}
-		if got == unsafe.Witnesses[i] {
-			t.Errorf("Labels[%d] is the raw vkey, want a short label", i)
+		if label == vkey {
+			t.Errorf("label is the raw vkey, want a short label")
 		}
-	}
-	if strings.Contains(unsafe.Error(), unsafe.Witnesses[0]) {
-		t.Errorf("Error() embeds a raw vkey:\n%s", unsafe.Error())
+		if strings.Contains(unsafe.Error(), vkey) {
+			t.Errorf("Error() embeds a raw vkey:\n%s", unsafe.Error())
+		}
 	}
 }

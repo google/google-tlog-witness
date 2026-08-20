@@ -30,6 +30,8 @@
 package policycheck
 
 import (
+	"sort"
+
 	"github.com/transparency-dev/formats/policy"
 )
 
@@ -92,15 +94,23 @@ func satisfies(p *policy.TLogPolicy, have witnessSet) bool {
 	return sat(p.Quorum)
 }
 
-// vkeys returns the verifier keys of every witness declared by p.
+// vkeys returns the verifier keys of every witness declared by p, sorted and
+// deduplicated. Sorting keeps subset enumeration, and therefore error
+// messages, stable.
 //
 // Witnesses that are declared but unreachable from the quorum rule are
 // included: they are part of the space of cosignatures the policy can
 // recognise, even if they cannot contribute to satisfying it.
 func vkeys(p *policy.TLogPolicy) []string {
+	seen := make(map[string]bool, len(p.Witnesses))
 	out := make([]string, 0, len(p.Witnesses))
 	for _, w := range p.Witnesses {
+		if seen[w.VKey] {
+			continue
+		}
+		seen[w.VKey] = true
 		out = append(out, w.VKey)
 	}
+	sort.Strings(out)
 	return out
 }

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("//build_defs:tlog.bzl", "tlog_proof_test")
+
 # This package provides Bazel macros for log-list and tlog-policy generation.
 
 # The .go files in this package are not a Go package: they are template test
@@ -19,10 +21,24 @@
 # which compile them in the consuming package alongside its data files.
 # gazelle:exclude log_list_files_test.go
 # gazelle:exclude tlog_policy_files_test.go
-# gazelle:exclude policy_pair_files_test.go
+# gazelle:exclude policy_pair_test.go
+# gazelle:exclude tlog_proof_test.go
 
 exports_files([
     "log_list_files_test.go",
     "tlog_policy_files_test.go",
-    "policy_pair_files_test.go",
+    "policy_pair_test.go",
+    "tlog_proof_test.go",
 ])
+
+# Smoke test for the tlog_proof_test macro.
+#
+# The corpus is a single empty proof, so what this exercises is the wiring —
+# policy loading, argument passing, path resolution and the empty-proof skip —
+# rather than verification itself. Checking a real proof would require a real
+# signed checkpoint, which cannot be minted at build time.
+tlog_proof_test(
+    name = "tlog_proof_test_smoke_test",
+    policy = "//policies/paic:prod-verifier.policy",
+    proofs = glob(["testdata/*.tlog_proof"]),
+)

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 
 	"github.com/transparency-dev/formats/policy"
@@ -89,6 +90,33 @@ func CheckProof(p *policy.TLogPolicy, raw []byte) Result {
 		r.Err = err
 	}
 	return r
+}
+
+// CheckProofFiles is [CheckProof] over a corpus of tlog-proof files on disk.
+//
+// It exists so that callers which only want the file-level check — the
+// generated proof tests, in particular — need not depend on the policy
+// parser themselves.
+//
+// Results are returned in the same order as paths. A file that cannot be
+// read is reported as a Result with a non-nil Err rather than aborting, so
+// that one bad file does not hide the state of the rest of the corpus. An
+// error is returned only if the policy itself cannot be loaded.
+func CheckProofFiles(policyPath string, paths []string) ([]Result, error) {
+	p, err := loadPolicy(policyPath)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]Result, len(paths))
+	for i, path := range paths {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			results[i] = Result{Err: fmt.Errorf("reading %s: %v", path, err)}
+			continue
+		}
+		results[i] = CheckProof(p, raw)
+	}
+	return results, nil
 }
 
 // checkpointOrigin returns the origin line of a signed checkpoint note,
