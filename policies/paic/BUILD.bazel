@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//build_defs:tlog.bzl", "tlog_policy", "tlog_policy_pair")
+load("//build_defs:tlog.bzl", "tlog_policy", "tlog_policy_pair", "tlog_policy_pair_test")
 
 # tlog-policy permits each name to be a group member at most once, so the
 # groups are nested rather than listing geomys and glasklar twice.
@@ -82,4 +82,19 @@ tlog_policy(
         "//witnesses:geomys.txt",
         "//witnesses:glasklar.txt",
     ],
+)
+
+# There is no tlog_policy_pair to relate ":dev-prod-verifier" to the logs it
+# trusts, so check each log policy against it directly: neither log may publish
+# a checkpoint that ":dev-prod-verifier" would reject.
+tlog_policy_pair_test(
+    name = "dev-prod-verifier.dev-log.policy-pair-test",
+    log_policy = ":dev-log.policy",
+    verifier_policy = ":dev-prod-verifier.policy",
+)
+
+tlog_policy_pair_test(
+    name = "dev-prod-verifier.prod-log.policy-pair-test",
+    log_policy = ":prod-log.policy",
+    verifier_policy = ":dev-prod-verifier.policy",
 )
