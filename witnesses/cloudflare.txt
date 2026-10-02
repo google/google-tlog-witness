@@ -1,0 +1,7 @@
+#
+# Witness operated by Cloudflare, Inc.
+# https://witness.cloudflare.com
+#
+witness cloudflare-ed25519 witness.cloudflare.com+b224669d+BBnx4aFlABKxOimfcvPZy/XUdh3l0s+0NHnqU6a1DHcz https://witness.cloudflare.com
+
+group cloudflare any cloudflare-ed25519
