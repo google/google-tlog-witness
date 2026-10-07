@@ -12,25 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//build_defs:tlog.bzl", "tlog_policy", "tlog_policy_pair_test")
+load("//build_defs:tlog.bzl", "tlog_policy", "tlog_policy_pair", "tlog_policy_pair_test")
 
-# Log quorum groups.
+# Any two of cloudflare, geomys and glasklar.
 #
-# tlog-policy permits each name to be a group member at most once, so the
-# groups are nested rather than listing geomys and glasklar twice.
-PAIC_LOG_GROUPS = [
-    "group geomys-glasklar all geomys glasklar",
-    "group tf-geomys-glasklar all tf geomys-glasklar",
-]
-
-# Verifier quorum groups: any two of cloudflare, geomys and glasklar.
-#
-# These can't share a policy with PAIC_LOG_GROUPS: a 2-of-3 threshold must own
-# geomys and glasklar directly, so they can't also be members of
-# geomys-glasklar.
-PAIC_VERIFIER_GROUPS = [
+# The tf witness is still contacted, and its cosignatures kept where
+# available, but is not required.
+PAIC_GROUPS = [
     "group cloudflare-geomys-glasklar 2 cloudflare geomys glasklar",
 ]
+
+PAIC_QUORUM = "cloudflare-geomys-glasklar"
 
 PAIC_WITNESSES = [
     "//witnesses:transparency-dev.txt",
@@ -40,73 +32,23 @@ PAIC_WITNESSES = [
 ]
 
 # Production log and verifier policies.
-#
-# Two rollouts are in flight here, both following "Policy rollout" in
-# README.md:
-#
-#  - The tf witness is being dropped from the quorum (it will still be
-#    contacted and its cosignatures kept where available).
-#  - The cloudflare witness is being added, with a target quorum of any two
-#    of cloudflare, geomys and glasklar.
-#
-# The verifier quorum has been relaxed first, to the 2-of-3 target, which is
-# weaker than the log quorum both with and without tf. The log quorum follows
-# once this has baked, moving straight to the 2-of-3 target.
-#
-# Until then the log and verifier policies need different groups, which
-# tlog_policy_pair doesn't support, so each pair is spelled out by hand. Both
-# halves of a pair share PAIC_WITNESSES and their log list, and the
-# tlog_policy_pair_test checks the quorums diverge in the safe direction. Go
-# back to tlog_policy_pair once the log quorum has caught up.
-tlog_policy(
-    name = "prod-log",
-    groups = PAIC_LOG_GROUPS,
+tlog_policy_pair(
+    name = "prod",
+    groups = PAIC_GROUPS,
     log_lists = ["//logs/paic:log-list.txt"],
-    quorum = "tf-geomys-glasklar",
+    quorum = PAIC_QUORUM,
     visibility = ["//visibility:public"],
     witnesses = PAIC_WITNESSES,
-)
-
-tlog_policy(
-    name = "prod-verifier",
-    groups = PAIC_VERIFIER_GROUPS,
-    log_lists = ["//logs/paic:log-list.txt"],
-    quorum = "cloudflare-geomys-glasklar",
-    visibility = ["//visibility:public"],
-    witnesses = PAIC_WITNESSES,
-)
-
-tlog_policy_pair_test(
-    name = "prod.policy-pair-test",
-    log_policy = ":prod-log.policy",
-    verifier_policy = ":prod-verifier.policy",
 )
 
 # Development log and verifier policies.
-#
-# See the rollout note above.
-tlog_policy(
-    name = "dev-log",
-    groups = PAIC_LOG_GROUPS,
+tlog_policy_pair(
+    name = "dev",
+    groups = PAIC_GROUPS,
     log_lists = ["//logs/paic:log-list-dev.txt"],
-    quorum = "tf-geomys-glasklar",
+    quorum = PAIC_QUORUM,
     visibility = ["//visibility:public"],
     witnesses = PAIC_WITNESSES,
-)
-
-tlog_policy(
-    name = "dev-verifier",
-    groups = PAIC_VERIFIER_GROUPS,
-    log_lists = ["//logs/paic:log-list-dev.txt"],
-    quorum = "cloudflare-geomys-glasklar",
-    visibility = ["//visibility:public"],
-    witnesses = PAIC_WITNESSES,
-)
-
-tlog_policy_pair_test(
-    name = "dev.policy-pair-test",
-    log_policy = ":dev-log.policy",
-    verifier_policy = ":dev-verifier.policy",
 )
 
 # Verifier policy trusting both the development and production logs.
@@ -121,12 +63,12 @@ tlog_policy_pair_test(
 # production log alone, via ":prod-verifier".
 tlog_policy(
     name = "dev-prod-verifier",
-    groups = PAIC_VERIFIER_GROUPS,
+    groups = PAIC_GROUPS,
     log_lists = [
         "//logs/paic:log-list.txt",
         "//logs/paic:log-list-dev.txt",
     ],
-    quorum = "cloudflare-geomys-glasklar",
+    quorum = PAIC_QUORUM,
     visibility = ["//visibility:public"],
     witnesses = PAIC_WITNESSES,
 )
