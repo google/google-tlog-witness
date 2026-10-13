@@ -100,8 +100,9 @@ def tlog_policy_pair(name, log_lists, witnesses, quorum, verifier_quorum = None,
     README.md).
 
     Args:
-        name: Base target name. Generates <name>-log-tlog-policy and
-            <name>-verifier-tlog-policy targets.
+        name: Base target name. Generates <name>-log and <name>-verifier
+            tlog-policy targets (producing <name>-log.policy and
+            <name>-verifier.policy), and a <name>.policy-pair-test target.
         log_lists: List of log-list file labels (shared by both policies).
         witnesses: List of witness config file labels (shared by both
             policies).
