@@ -31,6 +31,12 @@ PAIC_WITNESSES = [
     "//witnesses:glasklar.txt",
 ]
 
+# The dev log also contacts Cloudflare's staging witness. It is not part of
+# PAIC_QUORUM, so its cosignatures are kept where available but never required.
+PAIC_DEV_WITNESSES = PAIC_WITNESSES + [
+    "//witnesses:cloudflare-staging.txt",
+]
+
 # Production log and verifier policies.
 tlog_policy_pair(
     name = "prod",
@@ -48,7 +54,7 @@ tlog_policy_pair(
     log_lists = ["//logs/paic:log-list-dev.txt"],
     quorum = PAIC_QUORUM,
     visibility = ["//visibility:public"],
-    witnesses = PAIC_WITNESSES,
+    witnesses = PAIC_DEV_WITNESSES,
 )
 
 # Verifier policy trusting both the development and production logs.

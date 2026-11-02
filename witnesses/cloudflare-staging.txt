@@ -1,0 +1,10 @@
+#
+# Staging witness operated by Cloudflare, Inc.
+# https://staging.witness.cloudflare.com
+#
+# Not a production witness: it runs pre-release builds and is restarted and
+# reconfigured without notice. Use it for development logs only.
+#
+witness cloudflare-staging-ed25519 staging.witness.cloudflare.com+3d5d70be+BOsZXhdsHsShvWcMDd7nzPO8OlysfxwNAQdsCEAiq6kV https://staging.witness.cloudflare.com
+
+group cloudflare-staging any cloudflare-staging-ed25519
