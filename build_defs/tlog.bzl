@@ -19,9 +19,9 @@ load("@rules_go//go:def.bzl", "go_test")
 def concatenated_log_list(name, srcs, visibility = None):
     """Concatenates per-product log lists into a single combined log list.
 
-    The output file is named <name>.txt and follows the witness-network
-    log-list format:
-    https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md
+    The output file is named <name>.txt and follows the
+    tlog-list format:
+    https://c2sp.org/tlog-list
 
     Args:
         name: Target name. The output file will be <name>.txt.
@@ -205,8 +205,8 @@ def log_list_test(name, srcs, **kwargs):
     """Validates log-list files against the logs/v0 format.
 
     Creates a go_test target that checks each file in srcs conforms to the
-    witness-network log-list format:
-    https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md
+    tlog-list format:
+    https://c2sp.org/tlog-list
 
     Args:
         name: Target name for the test.

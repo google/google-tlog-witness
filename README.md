@@ -5,7 +5,7 @@ witness interactions. It contains:
 
 - **Log lists**: The set of Google-operated transparency log origins published
   for witness discovery, following the
-  [log-list format](https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md).
+  [tlog-list format](https://c2sp.org/tlog-list).
 - **Witness configurations**: Endpoints and keys for witnesses that cosign
   Google's log checkpoints, following the
   [tlog-policy format](https://c2sp.org/tlog-policy).
@@ -29,7 +29,7 @@ To publish a new log origin:
 
 1. Create a directory under `logs/<product>/` with one or more log-list files
    (e.g. `log-list.txt`) following the
-   [log-list format](https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md).
+   [tlog-list format](https://c2sp.org/tlog-list).
 2. Add a `BUILD.bazel` that exports those files (`exports_files([...])`) and
    declares a `log_list_test()` over them.
 3. Add your log-list to the `concatenated_log_list()` target in
@@ -191,8 +191,8 @@ The Bazel macros in `build_defs/tlog.bzl` provide:
   diverge temporarily during a policy rollout. It also creates a
   `<name>.policy-pair-test` target asserting the divergence is in the safe
   direction.
-- `log_list_test(name, srcs)` — validates log-list files against the logs/v0
-  format.
+- `log_list_test(name, srcs)` — validates log-list files against the
+  [tlog-list spec](https://c2sp.org/tlog-list).
 - `tlog_policy_test(name, srcs)` — validates tlog-policy files against the
   [C2SP spec](https://c2sp.org/tlog-policy).
 - `tlog_policy_pair_test(name, log_policy, verifier_policy)` — checks that
