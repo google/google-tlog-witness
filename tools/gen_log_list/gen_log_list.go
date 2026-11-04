@@ -13,8 +13,8 @@
 // limitations under the License.
 
 // gen_log_list concatenates multiple per-product log-list files into a single
-// combined log list following the witness-network log-list format:
-// https://github.com/transparency-dev/witness-network/blob/main/log-list-format.md
+// combined log list following the tlog-list format:
+// https://c2sp.org/tlog-list
 //
 // Each input file must contain a "logs/v0" header line. The output contains a
 // single "logs/v0" header, followed by the log entries from each input file,
