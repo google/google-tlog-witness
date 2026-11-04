@@ -12,25 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package log_list_files_test validates log-list files against the
-// tlog-list format (logs/v0): https://c2sp.org/tlog-list
-//
-// Lines are separated by newline (0x0A) characters, and have all leading and
-// trailing space (0x20) and tab (0x09) characters removed before processing.
-// Blank lines and lines starting with '#' are ignored.
-//
-// A valid log-list file starts with the header line "logs/v0", followed by
-// log entries. Each log entry consists of the following key-value lines, in
-// exactly this order:
-//
-//	vkey <name>+<keyid>+<base64key>   (required)
-//	origin <origin>                   (optional; defaults to the vkey's key name)
-//	qpd <decimal in [1, 2^31)>        (required; no sign, no leading zeroes)
-//	contact <string>                  (required)
-//
-// Logs are identified by their origin, which must be unique.
-//
-// Deviations from c2sp.org/tlog-list:
+// Package log_list_files_test validates log-list files against
+// https://c2sp.org/tlog-list, with the following deviations:
 //
 //   - The spec permits only one vkey per log, but our logs publish several
 //     keys (e.g. Ed25519 and ML-DSA-44). Consecutive entries that share an
@@ -70,14 +53,12 @@ var nextKeys = map[string][]string{
 
 // logEntry holds the key-value lines of a single log entry (one vkey).
 type logEntry struct {
-	line       int // line of the vkey line
-	keyName    string
-	vkey       string
-	origin     string // value of the origin line, or "" if omitted
-	qpd        string
-	contact    string
-	hasQPD     bool
-	hasContact bool
+	line    int // line of the vkey line
+	keyName string
+	vkey    string
+	origin  string  // value of the origin line, or "" if omitted
+	qpd     *string // nil if the qpd line is missing
+	contact *string // nil if the contact line is missing
 }
 
 // effectiveOrigin returns the entry's origin line, defaulting to the vkey's
@@ -129,10 +110,10 @@ func validateLogList(data string) []string {
 			return
 		}
 		var missing []string
-		if !cur.hasQPD {
+		if cur.qpd == nil {
 			missing = append(missing, "qpd")
 		}
-		if !cur.hasContact {
+		if cur.contact == nil {
 			missing = append(missing, "contact")
 		}
 		if len(missing) > 0 {
@@ -213,8 +194,7 @@ func validateLogList(data string) []string {
 			cur.origin = value
 
 		case "qpd":
-			cur.hasQPD = true
-			cur.qpd = value
+			cur.qpd = &value
 			if !qpdRe.MatchString(value) {
 				addErr("line %d: qpd must be an ASCII decimal with no sign or leading zeroes, got %q", lineNum, value)
 			} else if n, err := strconv.ParseInt(value, 10, 64); err != nil || n >= maxQPD {
@@ -222,8 +202,7 @@ func validateLogList(data string) []string {
 			}
 
 		case "contact":
-			cur.hasContact = true
-			cur.contact = value
+			cur.contact = &value
 			if value == "" {
 				addErr("line %d: contact line must have a value", lineNum)
 			}
@@ -278,11 +257,12 @@ func checkOrigins(entries []*logEntry) []string {
 		case prev != nil && prev.effectiveOrigin() == origin:
 			// An additional key for the same log (see TODO above). The log's
 			// parameters must be consistent across its keys.
-			if e.qpd != prev.qpd {
-				errs = append(errs, fmt.Sprintf("line %d: qpd %q differs from qpd %q of the preceding key for origin %q", e.line, e.qpd, prev.qpd, origin))
+			// Missing lines have already been reported.
+			if e.qpd != nil && prev.qpd != nil && *e.qpd != *prev.qpd {
+				errs = append(errs, fmt.Sprintf("line %d: qpd %q differs from qpd %q of the preceding key for origin %q", e.line, *e.qpd, *prev.qpd, origin))
 			}
-			if e.contact != prev.contact {
-				errs = append(errs, fmt.Sprintf("line %d: contact %q differs from contact %q of the preceding key for origin %q", e.line, e.contact, prev.contact, origin))
+			if e.contact != nil && prev.contact != nil && *e.contact != *prev.contact {
+				errs = append(errs, fmt.Sprintf("line %d: contact %q differs from contact %q of the preceding key for origin %q", e.line, *e.contact, *prev.contact, origin))
 			}
 		case seen:
 			errs = append(errs, fmt.Sprintf("line %d: origin %q is already used by the log at line %d; logs must not share an origin", e.line, origin, first))
