@@ -13,14 +13,9 @@
 // limitations under the License.
 
 // Package log_list_files_test validates log-list files against
-// https://c2sp.org/tlog-list, with the following deviations:
-//
-//   - The spec permits only one vkey per log, but our logs publish several
-//     keys (e.g. Ed25519 and ML-DSA-44). Consecutive entries that share an
-//     origin are therefore accepted as keys of the same log, provided they
-//     agree on qpd and contact. Entries sharing an origin must be adjacent.
-//   - The spec permits a list with zero logs. We require at least one, since
-//     an empty product list is almost certainly a mistake.
+// https://c2sp.org/tlog-list, with one deviation: the spec permits a list with
+// zero logs, but we require at least one, since an empty product list is
+// almost certainly a mistake.
 package log_list_files_test
 
 import (
@@ -224,18 +219,13 @@ func validateLogList(data string) []string {
 // checkOrigins checks that no two logs share an origin, and that no vkey is
 // listed twice.
 //
-// TODO(benbirt): c2sp.org/tlog-list allows only one vkey per log ("Each log
-// can have only one vkey"), and "Two logs MUST NOT share the same origin".
-// We currently relax this by treating adjacent entries with the same origin
-// as multiple keys of one log. Once it is possible to publish a single vkey
-// per log (e.g. the spec gains multi-key support, or our logs drop to one
-// key each), remove the adjacency grouping below and reject any repeated
-// origin outright.
+// Each entry is a log, and a log has exactly one vkey, so an origin may appear
+// only once: a second vkey for an origin is rejected just as a second log
+// claiming it would be.
 func checkOrigins(entries []*logEntry) []string {
 	var errs []string
 	seenVkeys := make(map[string]int)   // vkey -> line of first occurrence
-	seenOrigins := make(map[string]int) // origin -> line of first entry of its log
-	var prev *logEntry
+	seenOrigins := make(map[string]int) // origin -> line of the log using it
 
 	for _, e := range entries {
 		if e.vkey != "" {
@@ -249,27 +239,13 @@ func checkOrigins(entries []*logEntry) []string {
 		origin := e.effectiveOrigin()
 		if origin == "" {
 			// The vkey was malformed; that has already been reported.
-			prev = nil
 			continue
 		}
-
-		switch first, seen := seenOrigins[origin]; {
-		case prev != nil && prev.effectiveOrigin() == origin:
-			// An additional key for the same log (see TODO above). The log's
-			// parameters must be consistent across its keys.
-			// Missing lines have already been reported.
-			if e.qpd != nil && prev.qpd != nil && *e.qpd != *prev.qpd {
-				errs = append(errs, fmt.Sprintf("line %d: qpd %q differs from qpd %q of the preceding key for origin %q", e.line, *e.qpd, *prev.qpd, origin))
-			}
-			if e.contact != nil && prev.contact != nil && *e.contact != *prev.contact {
-				errs = append(errs, fmt.Sprintf("line %d: contact %q differs from contact %q of the preceding key for origin %q", e.line, *e.contact, *prev.contact, origin))
-			}
-		case seen:
-			errs = append(errs, fmt.Sprintf("line %d: origin %q is already used by the log at line %d; logs must not share an origin", e.line, origin, first))
-		default:
-			seenOrigins[origin] = e.line
+		if first, ok := seenOrigins[origin]; ok {
+			errs = append(errs, fmt.Sprintf("line %d: origin %q is already used by the log at line %d; each log has exactly one vkey, and logs must not share an origin", e.line, origin, first))
+			continue
 		}
-		prev = e
+		seenOrigins[origin] = e.line
 	}
 	return errs
 }
@@ -325,10 +301,6 @@ func TestValidateLogList(t *testing.T) {
 		{
 			name: "valid multiple logs",
 			data: "logs/v0\nvkey " + a + "\nqpd 1\ncontact x\nvkey " + b + "\nqpd 2147483647\ncontact y\n",
-		},
-		{
-			name: "valid multiple keys per log",
-			data: "logs/v0\nvkey " + a + "\nqpd 10\ncontact x\nvkey " + a2 + "\nqpd 10\ncontact x\n",
 		},
 		{
 			name:    "missing header",
@@ -406,7 +378,12 @@ func TestValidateLogList(t *testing.T) {
 			wantErr: "carriage return",
 		},
 		{
-			name:    "non-adjacent shared origin",
+			name:    "second vkey for a log",
+			data:    "logs/v0\nvkey " + a + "\nqpd 10\ncontact x\nvkey " + a2 + "\nqpd 10\ncontact x\n",
+			wantErr: `origin "a.example/log" is already used`,
+		},
+		{
+			name:    "second vkey for a log, not adjacent",
 			data:    "logs/v0\nvkey " + a + "\nqpd 10\ncontact x\nvkey " + b + "\nqpd 10\ncontact x\nvkey " + a2 + "\nqpd 10\ncontact x\n",
 			wantErr: `origin "a.example/log" is already used`,
 		},
@@ -414,16 +391,6 @@ func TestValidateLogList(t *testing.T) {
 			name:    "origin line collides with another log",
 			data:    "logs/v0\nvkey " + a + "\nqpd 10\ncontact x\nvkey " + b + "\nqpd 10\ncontact x\nvkey " + testVkey("c.example/log") + "\norigin a.example/log\nqpd 10\ncontact x\n",
 			wantErr: `origin "a.example/log" is already used`,
-		},
-		{
-			name:    "multiple keys with different qpd",
-			data:    "logs/v0\nvkey " + a + "\nqpd 10\ncontact x\nvkey " + a2 + "\nqpd 20\ncontact x\n",
-			wantErr: "differs from qpd",
-		},
-		{
-			name:    "multiple keys with different contact",
-			data:    "logs/v0\nvkey " + a + "\nqpd 10\ncontact x\nvkey " + a2 + "\nqpd 10\ncontact y\n",
-			wantErr: "differs from contact",
 		},
 		{
 			name:    "duplicate vkey",
