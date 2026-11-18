@@ -5,6 +5,6 @@
 # Not a production witness: it runs pre-release builds and is restarted and
 # reconfigured without notice. Use it for development logs only.
 #
-witness cloudflare-staging-ed25519 staging.witness.cloudflare.com+3d5d70be+BOsZXhdsHsShvWcMDd7nzPO8OlysfxwNAQdsCEAiq6kV https://staging.witness.cloudflare.com
+witness cloudflare-staging-ed25519 staging.witness.cloudflare.com+d4593924+BOw+mnm/08YM/aJyIRtm5G2ON3hSV52ot8dBoijfZyMc https://staging.witness.cloudflare.com
 
 group cloudflare-staging any cloudflare-staging-ed25519
