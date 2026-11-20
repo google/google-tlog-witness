@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gen_tlog_policy generates a tlog-policy file by inlining log-list and
-// witness configuration inputs.
+// gen_tlog_policy generates a tlog-policy file by inlining log-list, witness,
+// and policy configuration inputs.
 //
 // The output format follows the tlog-policy specification:
 // https://c2sp.org/tlog-policy
@@ -26,16 +26,16 @@
 //     ("group-log" and "group-verifier") are resolved for --role: the line
 //     for that role is emitted as a plain "group" line and the line for the
 //     other role is dropped, so the output is always a standard tlog-policy.
-//   - A "# Policy" section with any additional group definitions and
-//     the quorum rule (both supplied via flags).
+//   - For the policy input: a header comment identifying the source, followed
+//     by the file's group definitions (with any role-qualified group lines
+//     resolved for --role) and its quorum rule.
 //
 // Usage:
 //
 //	gen_tlog_policy --role=<log|verifier>
 //	    --log-list=<path> [--log-list=<path>...]
 //	    --witnesses=<path> [--witnesses=<path>...]
-//	    [--group=<definition>...]
-//	    --quorum=<name>
+//	    --policy=<path>
 package main
 
 import (
@@ -61,11 +61,10 @@ const (
 const roleGroupPrefix = "group-"
 
 var (
-	role      = flag.String("role", "", "who consumes the policy: \"log\" or \"verifier\" (required)")
-	logLists  = flagutil.StringSlice("log-list", "path to a log-list file (repeatable)")
-	witnesses = flagutil.StringSlice("witnesses", "path to a witness config file (repeatable)")
-	groups    = flagutil.StringSlice("group", "additional group definition, e.g. 'group mygroup any w1 w2' (repeatable)")
-	quorum    = flag.String("quorum", "", "quorum name (required)")
+	role       = flag.String("role", "", "who consumes the policy: \"log\" or \"verifier\" (required)")
+	logLists   = flagutil.StringSlice("log-list", "path to a log-list file (repeatable)")
+	witnesses  = flagutil.StringSlice("witnesses", "path to a witness config file (repeatable)")
+	policyFile = flag.String("policy", "", "path to a policy file containing group and quorum rules (required)")
 )
 
 func main() {
@@ -84,8 +83,8 @@ func run() error {
 	if len(*logLists) == 0 {
 		return fmt.Errorf("at least one --log-list is required")
 	}
-	if *quorum == "" {
-		return fmt.Errorf("--quorum is required")
+	if *policyFile == "" {
+		return fmt.Errorf("--policy is required")
 	}
 
 	// Collect all output lines and defined names for validation.
@@ -132,41 +131,15 @@ func run() error {
 		output = append(output, content...)
 	}
 
-	// Process additional groups.
-	var policyLines []string
-	for _, g := range *groups {
-		line := g
-		if !strings.HasPrefix(line, "group ") {
-			line = "group " + line
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 4 {
-			return fmt.Errorf("invalid group definition: %q (need at least 'group <name> <threshold> <member>')", g)
-		}
-		groupName := fields[1]
-		if definedNames[groupName] {
-			return fmt.Errorf("duplicate name %q in group definition", groupName)
-		}
-		definedNames[groupName] = true
-
-		// Validate that group members reference defined names.
-		for _, member := range fields[3:] {
-			if !definedNames[member] {
-				return fmt.Errorf("group %q references undefined name %q", groupName, member)
-			}
-		}
-		policyLines = append(policyLines, line)
+	// Process the policy file: inline its group and quorum rules, resolving
+	// role-qualified groups and validating references against definedNames.
+	policyLines, err := readPolicyFile(*policyFile, *role, definedNames)
+	if err != nil {
+		return fmt.Errorf("processing policy file %s: %v", *policyFile, err)
 	}
-
-	// Validate quorum reference.
-	if *quorum != "none" && !definedNames[*quorum] {
-		return fmt.Errorf("quorum references undefined name %q", *quorum)
-	}
-
-	policyLines = append(policyLines, fmt.Sprintf("quorum %s", *quorum))
 
 	output = append(output, "")
-	output = append(output, "# Policy")
+	output = append(output, fmt.Sprintf("# Policy from %s", *policyFile))
 	output = append(output, policyLines...)
 
 	// Write output.
@@ -234,7 +207,7 @@ func resolveWitnessFile(r io.Reader, role string) (lines []string, names []strin
 
 		trimmed := strings.TrimSpace(line)
 		fields := strings.Fields(trimmed)
-		if len(fields) == 0 {
+		if len(fields) == 0 || strings.HasPrefix(trimmed, "#") {
 			lines = append(lines, line)
 			continue
 		}
@@ -251,26 +224,15 @@ func resolveWitnessFile(r io.Reader, role string) (lines []string, names []strin
 			}
 			names = append(names, fields[1])
 		case roleGroupPrefix + roleLog, roleGroupPrefix + roleVerifier:
-			if len(fields) < 4 {
-				return nil, nil, fmt.Errorf("invalid %s line: %q", keyword, trimmed)
+			rewritten, name, emit, err := resolveRoleGroupLine(line, trimmed, fields, role, roleGroups)
+			if err != nil {
+				return nil, nil, err
 			}
-			name := fields[1]
-			lineRole := strings.TrimPrefix(keyword, roleGroupPrefix)
-			if roleGroups[name] == nil {
-				roleGroups[name] = make(map[string]bool)
-			}
-			if roleGroups[name][lineRole] {
-				return nil, nil, fmt.Errorf("more than one %s line for %q", keyword, name)
-			}
-			roleGroups[name][lineRole] = true
-			if lineRole != role {
+			if !emit {
 				continue
 			}
 			names = append(names, name)
-			// Rewrite the keyword, dropping any padding that aligned the
-			// pair of lines with each other.
-			i := strings.Index(line, keyword)
-			line = line[:i] + "group " + strings.TrimLeft(line[i+len(keyword):], " \t")
+			line = rewritten
 		case "log", "quorum":
 			return nil, nil, fmt.Errorf("witness files must not contain %q lines", keyword)
 		}
@@ -280,6 +242,152 @@ func resolveWitnessFile(r io.Reader, role string) (lines []string, names []strin
 		return nil, nil, err
 	}
 
+	if err := checkRoleGroupsPaired(roleGroups); err != nil {
+		return nil, nil, err
+	}
+
+	return trimTrailingBlankLines(lines), names, nil
+}
+
+// readPolicyFile reads the policy file at path. See resolvePolicyFile for what
+// it returns.
+func readPolicyFile(path, role string, witnessNames map[string]bool) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return resolvePolicyFile(f, role, witnessNames)
+}
+
+// resolvePolicyFile reads a product policy file (containing group, group-log,
+// group-verifier, and quorum lines) and returns the lines to inline into a
+// policy for the given role (preserving comments).
+//
+// Group members may reference names in witnessNames or groups defined earlier
+// in the policy file. A policy file must contain exactly one "quorum" line and
+// must not contain "log" or "witness" lines.
+func resolvePolicyFile(r io.Reader, role string, witnessNames map[string]bool) ([]string, error) {
+	definedNames := make(map[string]bool, len(witnessNames))
+	for name := range witnessNames {
+		definedNames[name] = true
+	}
+	roleGroups := make(map[string]map[string]bool)
+
+	var lines []string
+	quorumCount := 0
+
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		trimmed := strings.TrimSpace(line)
+		fields := strings.Fields(trimmed)
+		if len(fields) == 0 || strings.HasPrefix(trimmed, "#") {
+			lines = append(lines, line)
+			continue
+		}
+
+		switch keyword := fields[0]; keyword {
+		case "group":
+			if len(fields) < 4 {
+				return nil, fmt.Errorf("invalid group line: %q", trimmed)
+			}
+			name := fields[1]
+			if definedNames[name] || roleGroups[name] != nil {
+				return nil, fmt.Errorf("duplicate name %q in group definition", name)
+			}
+			for _, member := range fields[3:] {
+				if !definedNames[member] {
+					return nil, fmt.Errorf("group %q references undefined name %q", name, member)
+				}
+			}
+			definedNames[name] = true
+		case roleGroupPrefix + roleLog, roleGroupPrefix + roleVerifier:
+			name := ""
+			if len(fields) >= 2 {
+				name = fields[1]
+			}
+			if name != "" && definedNames[name] {
+				return nil, fmt.Errorf("duplicate name %q in %s definition", name, keyword)
+			}
+			rewritten, name, emit, err := resolveRoleGroupLine(line, trimmed, fields, role, roleGroups)
+			if err != nil {
+				return nil, err
+			}
+			for _, member := range fields[3:] {
+				if !definedNames[member] {
+					return nil, fmt.Errorf("group %q references undefined name %q", name, member)
+				}
+			}
+			if roleGroups[name][roleLog] && roleGroups[name][roleVerifier] {
+				definedNames[name] = true
+			}
+			if !emit {
+				continue
+			}
+			line = rewritten
+		case "quorum":
+			if len(fields) != 2 {
+				return nil, fmt.Errorf("invalid quorum line: %q", trimmed)
+			}
+			quorumCount++
+			if quorumCount > 1 {
+				return nil, fmt.Errorf("policy file must contain at most one quorum line")
+			}
+			q := fields[1]
+			if q != "none" && !definedNames[q] {
+				return nil, fmt.Errorf("quorum references undefined name %q", q)
+			}
+		case "log", "witness":
+			return nil, fmt.Errorf("policy files must not contain %q lines", keyword)
+		default:
+			return nil, fmt.Errorf("unrecognised keyword %q in policy file", keyword)
+		}
+		lines = append(lines, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := checkRoleGroupsPaired(roleGroups); err != nil {
+		return nil, err
+	}
+	if quorumCount == 0 {
+		return nil, fmt.Errorf("policy file must contain a quorum line")
+	}
+
+	return trimTrailingBlankLines(lines), nil
+}
+
+// resolveRoleGroupLine validates and tracks one "group-log" or "group-verifier"
+// line. If the line matches role, emit is true and rewritten is the line with
+// its keyword replaced by "group".
+func resolveRoleGroupLine(line, trimmed string, fields []string, role string, roleGroups map[string]map[string]bool) (rewritten, name string, emit bool, err error) {
+	keyword := fields[0]
+	if len(fields) < 4 {
+		return "", "", false, fmt.Errorf("invalid %s line: %q", keyword, trimmed)
+	}
+	name = fields[1]
+	lineRole := strings.TrimPrefix(keyword, roleGroupPrefix)
+	if roleGroups[name] == nil {
+		roleGroups[name] = make(map[string]bool)
+	}
+	if roleGroups[name][lineRole] {
+		return "", "", false, fmt.Errorf("more than one %s line for %q", keyword, name)
+	}
+	roleGroups[name][lineRole] = true
+	if lineRole != role {
+		return "", name, false, nil
+	}
+	// Rewrite the keyword, dropping any padding that aligned the pair of lines
+	// with each other.
+	i := strings.Index(line, keyword)
+	rewritten = line[:i] + "group " + strings.TrimLeft(line[i+len(keyword):], " \t")
+	return rewritten, name, true, nil
+}
+
+func checkRoleGroupsPaired(roleGroups map[string]map[string]bool) error {
 	var unpaired []string
 	for name, roles := range roleGroups {
 		if !roles[roleLog] || !roles[roleVerifier] {
@@ -288,14 +396,15 @@ func resolveWitnessFile(r io.Reader, role string) (lines []string, names []strin
 	}
 	if len(unpaired) > 0 {
 		sort.Strings(unpaired)
-		return nil, nil, fmt.Errorf("groups need both a %s and a %s line: %s",
+		return fmt.Errorf("groups need both a %s and a %s line: %s",
 			roleGroupPrefix+roleLog, roleGroupPrefix+roleVerifier, strings.Join(unpaired, ", "))
 	}
+	return nil
+}
 
-	// Trim trailing empty lines.
+func trimTrailingBlankLines(lines []string) []string {
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
-
-	return lines, names, nil
+	return lines
 }

@@ -1,0 +1,6 @@
+# Any two of cloudflare, geomys and glasklar.
+#
+# The tf witness is still contacted, and its cosignatures kept where
+# available, but is not required.
+group cloudflare-geomys-glasklar 2 cloudflare geomys glasklar
+quorum cloudflare-geomys-glasklar

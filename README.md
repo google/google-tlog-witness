@@ -240,21 +240,21 @@ The Bazel macros in `build_defs/tlog.bzl` provide:
 
 - `concatenated_log_list(name, srcs)` — concatenates per-product log lists into
   a single combined log list, written to `<name>.txt`.
-- `tlog_log_policy(name, log_lists, witnesses, quorum, groups=[])` and
-  `tlog_verifier_policy(name, log_lists, witnesses, quorum, groups=[])` — each
-  generates a single tlog-policy file (`<name>.policy`) from log lists, witness
-  configs, and a caller-defined quorum rule, for a log operator and for
-  verifiers respectively. They differ only in which definition they take of a
-  group that a witness file defines with `group-log` and `group-verifier`
-  lines. Each also creates a `<name>.policy-test` target that validates the
-  generated policy.
-- `tlog_policy_pair(name, log_lists, witnesses, quorum, verifier_quorum=None,
-  groups=[])` — generates a matched pair of log and verifier tlog-policy files
-  from shared inputs, via a `tlog_log_policy()` target named `<name>-log` and a
-  `tlog_verifier_policy()` target named `<name>-verifier`. An optional
-  `verifier_quorum` allows the verifier quorum to diverge temporarily during a
-  policy rollout. It also creates a `<name>.policy-pair-test` target asserting
-  that any divergence is in the safe direction.
+- `tlog_log_policy(name, log_lists, witnesses, policy)` and
+  `tlog_verifier_policy(name, log_lists, witnesses, policy)` — each generates a
+  single tlog-policy file (`<name>.policy`) from log lists, witness configs,
+  and a policy file defining product-level groups and the `quorum` rule, for a
+  log operator and for verifiers respectively. They differ only in which
+  definition they take of a group defined with `group-log` and `group-verifier`
+  lines (in either a witness file or the policy file). Each also creates a
+  `<name>.policy-test` target that validates the generated policy.
+- `tlog_policy_pair(name, log_lists, witnesses, policy)` — generates a matched
+  pair of log and verifier tlog-policy files from shared inputs, via a
+  `tlog_log_policy()` target named `<name>-log` and a `tlog_verifier_policy()`
+  target named `<name>-verifier`. Product-level quorum rollouts can diverge
+  temporarily using `group-log` and `group-verifier` lines in the policy file.
+  It also creates a `<name>.policy-pair-test` target asserting that any
+  divergence is in the safe direction.
 - `log_list_test(name, srcs)` — validates log-list files against the
   [tlog-list spec](https://c2sp.org/tlog-list).
 - `tlog_policy_test(name, srcs)` — validates tlog-policy files against the

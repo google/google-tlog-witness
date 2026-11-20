@@ -117,3 +117,127 @@ func TestResolveWitnessFileErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestResolvePolicyFile(t *testing.T) {
+	const input = `# Quorum rollout: add vendor3 on the log side first.
+group-log      quorum-grp 2 vendor1 vendor2 vendor3
+group-verifier quorum-grp 2 vendor1 vendor2
+quorum quorum-grp
+`
+	witnessNames := map[string]bool{
+		"vendor1": true,
+		"vendor2": true,
+		"vendor3": true,
+	}
+
+	for _, tc := range []struct {
+		role      string
+		wantLines []string
+	}{
+		{
+			role: roleLog,
+			wantLines: []string{
+				"# Quorum rollout: add vendor3 on the log side first.",
+				"group quorum-grp 2 vendor1 vendor2 vendor3",
+				"quorum quorum-grp",
+			},
+		},
+		{
+			role: roleVerifier,
+			wantLines: []string{
+				"# Quorum rollout: add vendor3 on the log side first.",
+				"group quorum-grp 2 vendor1 vendor2",
+				"quorum quorum-grp",
+			},
+		},
+	} {
+		t.Run(tc.role, func(t *testing.T) {
+			lines, err := resolvePolicyFile(strings.NewReader(input), tc.role, witnessNames)
+			if err != nil {
+				t.Fatalf("resolvePolicyFile() error: %v", err)
+			}
+			if !slices.Equal(lines, tc.wantLines) {
+				t.Errorf("lines:\n%s\nwant:\n%s", strings.Join(lines, "\n"), strings.Join(tc.wantLines, "\n"))
+			}
+		})
+	}
+}
+
+func TestResolvePolicyFileQuorumNone(t *testing.T) {
+	lines, err := resolvePolicyFile(strings.NewReader("quorum none\n"), roleLog, map[string]bool{})
+	if err != nil {
+		t.Fatalf("resolvePolicyFile() error: %v", err)
+	}
+	if !slices.Equal(lines, []string{"quorum none"}) {
+		t.Errorf("lines: %q, want [quorum none]", lines)
+	}
+}
+
+func TestResolvePolicyFileErrors(t *testing.T) {
+	witnessNames := map[string]bool{"v1": true, "v2": true}
+	for _, tc := range []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{
+			name:    "missing quorum",
+			input:   "group g any v1 v2\n",
+			wantErr: "policy file must contain a quorum line",
+		},
+		{
+			name:    "duplicate quorum",
+			input:   "quorum v1\nquorum v2\n",
+			wantErr: "at most one quorum line",
+		},
+		{
+			name:    "undefined quorum",
+			input:   "quorum nobody\n",
+			wantErr: `quorum references undefined name "nobody"`,
+		},
+		{
+			name:    "undefined group member",
+			input:   "group g any v1 nobody\nquorum g\n",
+			wantErr: `group "g" references undefined name "nobody"`,
+		},
+		{
+			name:    "duplicate name with witness",
+			input:   "group v1 any v2\nquorum v1\n",
+			wantErr: `duplicate name "v1"`,
+		},
+		{
+			name:    "unpaired group-log",
+			input:   "group-log g any v1\nquorum v1\n",
+			wantErr: "groups need both a group-log and a group-verifier line: g",
+		},
+		{
+			name:    "quorum references half-defined role group",
+			input:   "group-log g any v1\nquorum g\ngroup-verifier g any v1\n",
+			wantErr: `quorum references undefined name "g"`,
+		},
+		{
+			name:    "witness line forbidden",
+			input:   "witness w vkey https://w.example\nquorum v1\n",
+			wantErr: `must not contain "witness" lines`,
+		},
+		{
+			name:    "log line forbidden",
+			input:   "log vkey\nquorum v1\n",
+			wantErr: `must not contain "log" lines`,
+		},
+		{
+			name:    "unknown keyword",
+			input:   "bogus foo\nquorum v1\n",
+			wantErr: `unrecognised keyword "bogus"`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, role := range []string{roleLog, roleVerifier} {
+				_, err := resolvePolicyFile(strings.NewReader(tc.input), role, witnessNames)
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Errorf("resolvePolicyFile(role=%s) error: %v, want one containing %q", role, err, tc.wantErr)
+				}
+			}
+		})
+	}
+}

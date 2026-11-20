@@ -39,7 +39,7 @@ def concatenated_log_list(name, srcs, visibility = None):
         visibility = visibility,
     )
 
-def _tlog_policy(name, role, log_lists, witnesses, quorum, groups, visibility):
+def _tlog_policy(name, role, log_lists, witnesses, policy, visibility):
     """Generates a tlog-policy file for the given role ("log" or "verifier").
 
     See tlog_log_policy() and tlog_verifier_policy().
@@ -50,14 +50,12 @@ def _tlog_policy(name, role, log_lists, witnesses, quorum, groups, visibility):
         cmd_parts.append("--log-list=$(location %s)" % log_list)
     for witness in witnesses:
         cmd_parts.append("--witnesses=$(location %s)" % witness)
-    for group in groups:
-        cmd_parts.append("--group=\"%s\"" % group)
-    cmd_parts.append("--quorum=%s" % quorum)
+    cmd_parts.append("--policy=$(location %s)" % policy)
     cmd_parts.append("> $@")
 
     native.genrule(
         name = name,
-        srcs = log_lists + witnesses,
+        srcs = log_lists + witnesses + [policy],
         outs = [name + ".policy"],
         cmd = " ".join(cmd_parts),
         tools = ["//tools/gen_tlog_policy"],
@@ -71,18 +69,18 @@ def _tlog_policy(name, role, log_lists, witnesses, quorum, groups, visibility):
         ],
     )
 
-def tlog_log_policy(name, log_lists, witnesses, quorum, groups = [], visibility = None):
+def tlog_log_policy(name, log_lists, witnesses, policy, visibility = None):
     """Generates the tlog-policy file a log operator consumes.
 
     Assembles a tlog-policy by inlining its inputs. Each input section is
     preceded by a header comment indicating the source file. The final
-    section contains any additional groups and the quorum rule, which come
-    from the BUILD rule. The output file will be <name>.policy. Also creates
-    a test target <name>.policy-test that validates the policy.
+    section comes from the policy file, which defines any product-level
+    groups and the quorum rule. The output file will be <name>.policy. Also
+    creates a test target <name>.policy-test that validates the policy.
 
-    A witness file can define a group differently for the log and for
-    verifiers, with a pair of "group-log" and "group-verifier" lines. This
-    policy takes the "group-log" definition of each such group.
+    A witness or policy file can define a group differently for the log and
+    for verifiers, with a pair of "group-log" and "group-verifier" lines.
+    This policy takes the "group-log" definition of each such group.
 
     Spec: https://c2sp.org/tlog-policy
 
@@ -93,12 +91,8 @@ def tlog_log_policy(name, log_lists, witnesses, quorum, groups = [], visibility 
         witnesses: List of witness config file labels. Contents are
             inlined (including comments), with each role-qualified group
             resolved to its "group-log" definition.
-        groups: Optional list of additional group definition strings, e.g.
-            ["group all-witnesses any w1 w2"]. These are appended after
-            the witness sections and may reference names defined in
-            witness files.
-        quorum: The quorum name (without the "quorum " prefix), e.g.
-            "ring-any-bells" or "none".
+        policy: Label of the policy file defining any additional groups
+            (including role-qualified pairs) and the quorum rule.
         visibility: Standard Bazel visibility.
     """
     _tlog_policy(
@@ -106,17 +100,16 @@ def tlog_log_policy(name, log_lists, witnesses, quorum, groups = [], visibility 
         role = "log",
         log_lists = log_lists,
         witnesses = witnesses,
-        quorum = quorum,
-        groups = groups,
+        policy = policy,
         visibility = visibility,
     )
 
-def tlog_verifier_policy(name, log_lists, witnesses, quorum, groups = [], visibility = None):
+def tlog_verifier_policy(name, log_lists, witnesses, policy, visibility = None):
     """Generates the tlog-policy file verifiers consume.
 
     As tlog_log_policy(), except that this policy takes the "group-verifier"
-    definition of each group that a witness file defines differently for the
-    log and for verifiers.
+    definition of each group that a witness or policy file defines
+    differently for the log and for verifiers.
 
     Spec: https://c2sp.org/tlog-policy
 
@@ -127,12 +120,8 @@ def tlog_verifier_policy(name, log_lists, witnesses, quorum, groups = [], visibi
         witnesses: List of witness config file labels. Contents are
             inlined (including comments), with each role-qualified group
             resolved to its "group-verifier" definition.
-        groups: Optional list of additional group definition strings, e.g.
-            ["group all-witnesses any w1 w2"]. These are appended after
-            the witness sections and may reference names defined in
-            witness files.
-        quorum: The quorum name (without the "quorum " prefix), e.g.
-            "ring-any-bells" or "none".
+        policy: Label of the policy file defining any additional groups
+            (including role-qualified pairs) and the quorum rule.
         visibility: Standard Bazel visibility.
     """
     _tlog_policy(
@@ -140,20 +129,19 @@ def tlog_verifier_policy(name, log_lists, witnesses, quorum, groups = [], visibi
         role = "verifier",
         log_lists = log_lists,
         witnesses = witnesses,
-        quorum = quorum,
-        groups = groups,
+        policy = policy,
         visibility = visibility,
     )
 
-def tlog_policy_pair(name, log_lists, witnesses, quorum, verifier_quorum = None, groups = [], visibility = None):
+def tlog_policy_pair(name, log_lists, witnesses, policy, visibility = None):
     """Generates a matched pair of log and verifier tlog-policy files.
 
     Produces a tlog_log_policy() and a tlog_verifier_policy() target from
-    shared inputs, ensuring that the log lists and witness files are always
-    identical between the log and verifier policies. The two policies may
-    differ only in the quorum configuration and in any groups a witness file
-    defines separately for each ("group-log" and "group-verifier" lines), and
-    only temporarily during a rollout (see "Policy rollout" in README.md).
+    shared inputs, ensuring that the log lists, witness files, and policy
+    file are always identical between the log and verifier policies. The two
+    policies may differ only in any groups defined separately for each
+    ("group-log" and "group-verifier" lines), and only temporarily during a
+    rollout (see "Policy rollout" in README.md).
 
     Args:
         name: Base target name. Generates <name>-log and <name>-verifier
@@ -162,29 +150,22 @@ def tlog_policy_pair(name, log_lists, witnesses, quorum, verifier_quorum = None,
         log_lists: List of log-list file labels (shared by both policies).
         witnesses: List of witness config file labels (shared by both
             policies).
-        quorum: The quorum name for the log policy (and the verifier
-            policy, unless verifier_quorum is set).
-        verifier_quorum: Optional. If set, the verifier policy uses this
-            quorum instead of quorum. Use this during policy rollouts
-            when the verifier quorum must temporarily diverge from the
-            log quorum.
-        groups: Optional list of additional group definition strings.
+        policy: Label of the policy file defining any additional groups and
+            the quorum rule (shared by both policies).
         visibility: Standard Bazel visibility.
     """
     tlog_log_policy(
         name = name + "-log",
         log_lists = log_lists,
         witnesses = witnesses,
-        quorum = quorum,
-        groups = groups,
+        policy = policy,
         visibility = visibility,
     )
     tlog_verifier_policy(
         name = name + "-verifier",
         log_lists = log_lists,
         witnesses = witnesses,
-        quorum = verifier_quorum or quorum,
-        groups = groups,
+        policy = policy,
         visibility = visibility,
     )
 
