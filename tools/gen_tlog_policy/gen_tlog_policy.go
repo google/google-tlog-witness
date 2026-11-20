@@ -22,13 +22,17 @@
 //   - For each log-list input: a header comment identifying the source,
 //     followed by "log <vkey>" lines extracted from the file.
 //   - For each witness input: a header comment identifying the source,
-//     followed by the file contents inlined verbatim.
+//     followed by the file contents inlined. Role-qualified group lines
+//     ("group-log" and "group-verifier") are resolved for --role: the line
+//     for that role is emitted as a plain "group" line and the line for the
+//     other role is dropped, so the output is always a standard tlog-policy.
 //   - A "# Policy" section with any additional group definitions and
 //     the quorum rule (both supplied via flags).
 //
 // Usage:
 //
-//	gen_tlog_policy --log-list=<path> [--log-list=<path>...]
+//	gen_tlog_policy --role=<log|verifier>
+//	    --log-list=<path> [--log-list=<path>...]
 //	    --witnesses=<path> [--witnesses=<path>...]
 //	    [--group=<definition>...]
 //	    --quorum=<name>
@@ -38,13 +42,26 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/google/google-tlog-witness/internal/flagutil"
 )
 
+// The roles a tlog-policy can be generated for.
+const (
+	roleLog      = "log"
+	roleVerifier = "verifier"
+)
+
+// roleGroupPrefix starts the keyword of a role-qualified group line: it is
+// followed by the role the line applies to.
+const roleGroupPrefix = "group-"
+
 var (
+	role      = flag.String("role", "", "who consumes the policy: \"log\" or \"verifier\" (required)")
 	logLists  = flagutil.StringSlice("log-list", "path to a log-list file (repeatable)")
 	witnesses = flagutil.StringSlice("witnesses", "path to a witness config file (repeatable)")
 	groups    = flagutil.StringSlice("group", "additional group definition, e.g. 'group mygroup any w1 w2' (repeatable)")
@@ -61,6 +78,9 @@ func main() {
 }
 
 func run() error {
+	if *role != roleLog && *role != roleVerifier {
+		return fmt.Errorf("--role must be %q or %q, got %q", roleLog, roleVerifier, *role)
+	}
 	if len(*logLists) == 0 {
 		return fmt.Errorf("at least one --log-list is required")
 	}
@@ -94,9 +114,10 @@ func run() error {
 		return fmt.Errorf("no log vkeys found in any log-list file")
 	}
 
-	// Process witness files: inline verbatim, extracting names for validation.
+	// Process witness files: inline them, resolving role-qualified groups and
+	// extracting names for validation.
 	for _, path := range *witnesses {
-		content, names, err := readWitnessFile(path)
+		content, names, err := readWitnessFile(path, *role)
 		if err != nil {
 			return fmt.Errorf("processing witness file %s: %v", path, err)
 		}
@@ -183,28 +204,42 @@ func extractVkeys(path string) ([]string, error) {
 	return vkeys, nil
 }
 
-// readWitnessFile reads a witness config file and returns the lines to inline
-// (preserving comments) and the names defined in the file (witness names and
-// group names).
-func readWitnessFile(path string) (lines []string, names []string, err error) {
+// readWitnessFile reads the witness config file at path. See
+// resolveWitnessFile for what it returns.
+func readWitnessFile(path, role string) (lines []string, names []string, err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer f.Close()
+	return resolveWitnessFile(f, role)
+}
 
-	scanner := bufio.NewScanner(f)
+// resolveWitnessFile reads a witness config file and returns the lines to
+// inline into a policy for the given role (preserving comments) and the names
+// defined in the file (witness names and group names).
+//
+// A group can be defined differently for the log and for verifiers by a pair
+// of "group-log" and "group-verifier" lines sharing a name. The line for role
+// is returned as a plain "group" line, and the other is left out. Each such
+// name needs exactly one line for each role, so that the name is defined
+// whichever role a policy is generated for.
+func resolveWitnessFile(r io.Reader, role string) (lines []string, names []string, err error) {
+	// The roles for which each role-qualified group has a line so far.
+	roleGroups := make(map[string]map[string]bool)
+
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
-		lines = append(lines, line)
 
 		trimmed := strings.TrimSpace(line)
 		fields := strings.Fields(trimmed)
 		if len(fields) == 0 {
+			lines = append(lines, line)
 			continue
 		}
 
-		switch fields[0] {
+		switch keyword := fields[0]; keyword {
 		case "witness":
 			if len(fields) < 3 {
 				return nil, nil, fmt.Errorf("invalid witness line: %q", trimmed)
@@ -215,12 +250,46 @@ func readWitnessFile(path string) (lines []string, names []string, err error) {
 				return nil, nil, fmt.Errorf("invalid group line: %q", trimmed)
 			}
 			names = append(names, fields[1])
+		case roleGroupPrefix + roleLog, roleGroupPrefix + roleVerifier:
+			if len(fields) < 4 {
+				return nil, nil, fmt.Errorf("invalid %s line: %q", keyword, trimmed)
+			}
+			name := fields[1]
+			lineRole := strings.TrimPrefix(keyword, roleGroupPrefix)
+			if roleGroups[name] == nil {
+				roleGroups[name] = make(map[string]bool)
+			}
+			if roleGroups[name][lineRole] {
+				return nil, nil, fmt.Errorf("more than one %s line for %q", keyword, name)
+			}
+			roleGroups[name][lineRole] = true
+			if lineRole != role {
+				continue
+			}
+			names = append(names, name)
+			// Rewrite the keyword, dropping any padding that aligned the
+			// pair of lines with each other.
+			i := strings.Index(line, keyword)
+			line = line[:i] + "group " + strings.TrimLeft(line[i+len(keyword):], " \t")
 		case "log", "quorum":
-			return nil, nil, fmt.Errorf("witness files must not contain %q lines", fields[0])
+			return nil, nil, fmt.Errorf("witness files must not contain %q lines", keyword)
 		}
+		lines = append(lines, line)
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, nil, err
+	}
+
+	var unpaired []string
+	for name, roles := range roleGroups {
+		if !roles[roleLog] || !roles[roleVerifier] {
+			unpaired = append(unpaired, name)
+		}
+	}
+	if len(unpaired) > 0 {
+		sort.Strings(unpaired)
+		return nil, nil, fmt.Errorf("groups need both a %s and a %s line: %s",
+			roleGroupPrefix+roleLog, roleGroupPrefix+roleVerifier, strings.Join(unpaired, ", "))
 	}
 
 	// Trim trailing empty lines.

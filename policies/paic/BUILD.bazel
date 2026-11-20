@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//build_defs:tlog.bzl", "tlog_policy", "tlog_policy_pair", "tlog_policy_pair_test")
+load("//build_defs:tlog.bzl", "tlog_policy_pair", "tlog_policy_pair_test", "tlog_verifier_policy")
 
 # Any two of cloudflare, geomys and glasklar.
 #
@@ -67,7 +67,7 @@ tlog_policy_pair(
 #
 # Production relying parties must NOT use this policy: they should trust the
 # production log alone, via ":prod-verifier".
-tlog_policy(
+tlog_verifier_policy(
     name = "dev-prod-verifier",
     groups = PAIC_GROUPS,
     log_lists = [
