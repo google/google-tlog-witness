@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gen_tlog_policy generates a tlog-policy file by inlining log-list and
-// witness configuration inputs.
+// gen_tlog_policy generates a tlog-policy file by inlining log-list, witness,
+// and policy configuration inputs.
 //
 // The output format follows the tlog-policy specification:
 // https://c2sp.org/tlog-policy
@@ -22,33 +22,49 @@
 //   - For each log-list input: a header comment identifying the source,
 //     followed by "log <vkey>" lines extracted from the file.
 //   - For each witness input: a header comment identifying the source,
-//     followed by the file contents inlined verbatim.
-//   - A "# Policy" section with any additional group definitions and
-//     the quorum rule (both supplied via flags).
+//     followed by the file contents inlined. Role-qualified group lines
+//     ("group-log" and "group-verifier") are resolved for --role: the line
+//     for that role is emitted as a plain "group" line and the line for the
+//     other role is dropped, so the output is always a standard tlog-policy.
+//   - For the policy input: a header comment identifying the source, followed
+//     by the file's group definitions (with any role-qualified group lines
+//     resolved for --role) and its quorum rule.
 //
 // Usage:
 //
-//	gen_tlog_policy --log-list=<path> [--log-list=<path>...]
+//	gen_tlog_policy --role=<log|verifier>
+//	    --log-list=<path> [--log-list=<path>...]
 //	    --witnesses=<path> [--witnesses=<path>...]
-//	    [--group=<definition>...]
-//	    --quorum=<name>
+//	    --policy=<path>
 package main
 
 import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/google/google-tlog-witness/internal/flagutil"
 )
 
+// The roles a tlog-policy can be generated for.
+const (
+	roleLog      = "log"
+	roleVerifier = "verifier"
+)
+
+// roleGroupPrefix starts the keyword of a role-qualified group line: it is
+// followed by the role the line applies to.
+const roleGroupPrefix = "group-"
+
 var (
-	logLists  = flagutil.StringSlice("log-list", "path to a log-list file (repeatable)")
-	witnesses = flagutil.StringSlice("witnesses", "path to a witness config file (repeatable)")
-	groups    = flagutil.StringSlice("group", "additional group definition, e.g. 'group mygroup any w1 w2' (repeatable)")
-	quorum    = flag.String("quorum", "", "quorum name (required)")
+	role       = flag.String("role", "", "who consumes the policy: \"log\" or \"verifier\" (required)")
+	logLists   = flagutil.StringSlice("log-list", "path to a log-list file (repeatable)")
+	witnesses  = flagutil.StringSlice("witnesses", "path to a witness config file (repeatable)")
+	policyFile = flag.String("policy", "", "path to a policy file containing group and quorum rules (required)")
 )
 
 func main() {
@@ -61,11 +77,14 @@ func main() {
 }
 
 func run() error {
+	if *role != roleLog && *role != roleVerifier {
+		return fmt.Errorf("--role must be %q or %q, got %q", roleLog, roleVerifier, *role)
+	}
 	if len(*logLists) == 0 {
 		return fmt.Errorf("at least one --log-list is required")
 	}
-	if *quorum == "" {
-		return fmt.Errorf("--quorum is required")
+	if *policyFile == "" {
+		return fmt.Errorf("--policy is required")
 	}
 
 	// Collect all output lines and defined names for validation.
@@ -94,58 +113,29 @@ func run() error {
 		return fmt.Errorf("no log vkeys found in any log-list file")
 	}
 
-	// Process witness files: inline verbatim, extracting names for validation.
+	// Process witness files: inline them, resolving role-qualified groups and
+	// recording defined names for validation.
+	witnessCfg := sectionConfig{kind: "witness", allowWitness: true}
 	for _, path := range *witnesses {
-		content, names, err := readWitnessFile(path)
+		content, err := readSection(path, *role, witnessCfg, definedNames)
 		if err != nil {
 			return fmt.Errorf("processing witness file %s: %v", path, err)
-		}
-		for _, name := range names {
-			if definedNames[name] {
-				return fmt.Errorf("duplicate name %q in witness file %s", name, path)
-			}
-			definedNames[name] = true
 		}
 		output = append(output, "")
 		output = append(output, fmt.Sprintf("# Witnesses from %s", path))
 		output = append(output, content...)
 	}
 
-	// Process additional groups.
-	var policyLines []string
-	for _, g := range *groups {
-		line := g
-		if !strings.HasPrefix(line, "group ") {
-			line = "group " + line
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 4 {
-			return fmt.Errorf("invalid group definition: %q (need at least 'group <name> <threshold> <member>')", g)
-		}
-		groupName := fields[1]
-		if definedNames[groupName] {
-			return fmt.Errorf("duplicate name %q in group definition", groupName)
-		}
-		definedNames[groupName] = true
-
-		// Validate that group members reference defined names.
-		for _, member := range fields[3:] {
-			if !definedNames[member] {
-				return fmt.Errorf("group %q references undefined name %q", groupName, member)
-			}
-		}
-		policyLines = append(policyLines, line)
+	// Process the policy file: inline its group and quorum rules, resolving
+	// role-qualified groups and validating references against definedNames.
+	policyCfg := sectionConfig{kind: "policy", requireQuorum: true}
+	policyLines, err := readSection(*policyFile, *role, policyCfg, definedNames)
+	if err != nil {
+		return fmt.Errorf("processing policy file %s: %v", *policyFile, err)
 	}
-
-	// Validate quorum reference.
-	if *quorum != "none" && !definedNames[*quorum] {
-		return fmt.Errorf("quorum references undefined name %q", *quorum)
-	}
-
-	policyLines = append(policyLines, fmt.Sprintf("quorum %s", *quorum))
 
 	output = append(output, "")
-	output = append(output, "# Policy")
+	output = append(output, fmt.Sprintf("# Policy from %s", *policyFile))
 	output = append(output, policyLines...)
 
 	// Write output.
@@ -183,50 +173,152 @@ func extractVkeys(path string) ([]string, error) {
 	return vkeys, nil
 }
 
-// readWitnessFile reads a witness config file and returns the lines to inline
-// (preserving comments) and the names defined in the file (witness names and
-// group names).
-func readWitnessFile(path string) (lines []string, names []string, err error) {
+// sectionConfig controls which keywords are permitted in an input section file.
+type sectionConfig struct {
+	kind          string // "witness" or "policy", used in error messages
+	allowWitness  bool
+	requireQuorum bool
+}
+
+// readSection reads a witness or policy file at path. See resolveSection.
+func readSection(path, role string, cfg sectionConfig, definedNames map[string]bool) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer f.Close()
+	return resolveSection(f, role, cfg, definedNames)
+}
 
-	scanner := bufio.NewScanner(f)
+// resolveSection reads a witness or policy file and returns the lines to inline
+// into a policy for the given role (preserving comments), recording newly
+// defined witness and group names in definedNames.
+//
+// A group can be defined differently for the log and for verifiers by a pair
+// of "group-log" and "group-verifier" lines sharing a name. The line for role
+// is returned as a plain "group" line, and the other is left out. Each such
+// name needs exactly one line for each role, and is added to definedNames once
+// both have appeared.
+func resolveSection(r io.Reader, role string, cfg sectionConfig, definedNames map[string]bool) ([]string, error) {
+	// The roles for which each role-qualified group has a line so far.
+	roleGroups := make(map[string]map[string]bool)
+
+	var lines []string
+	quorumCount := 0
+
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
-		lines = append(lines, line)
 
 		trimmed := strings.TrimSpace(line)
 		fields := strings.Fields(trimmed)
-		if len(fields) == 0 {
+		if len(fields) == 0 || strings.HasPrefix(trimmed, "#") {
+			lines = append(lines, line)
 			continue
 		}
 
-		switch fields[0] {
+		switch keyword := fields[0]; keyword {
 		case "witness":
-			if len(fields) < 3 {
-				return nil, nil, fmt.Errorf("invalid witness line: %q", trimmed)
+			if !cfg.allowWitness {
+				return nil, fmt.Errorf("%s files must not contain %q lines", cfg.kind, keyword)
 			}
-			names = append(names, fields[1])
+			if len(fields) < 3 {
+				return nil, fmt.Errorf("invalid witness line: %q", trimmed)
+			}
+			name := fields[1]
+			if definedNames[name] || roleGroups[name] != nil {
+				return nil, fmt.Errorf("duplicate name %q", name)
+			}
+			definedNames[name] = true
 		case "group":
 			if len(fields) < 4 {
-				return nil, nil, fmt.Errorf("invalid group line: %q", trimmed)
+				return nil, fmt.Errorf("invalid group line: %q", trimmed)
 			}
-			names = append(names, fields[1])
-		case "log", "quorum":
-			return nil, nil, fmt.Errorf("witness files must not contain %q lines", fields[0])
+			name := fields[1]
+			if definedNames[name] || roleGroups[name] != nil {
+				return nil, fmt.Errorf("duplicate name %q", name)
+			}
+			for _, member := range fields[3:] {
+				if !definedNames[member] {
+					return nil, fmt.Errorf("group %q references undefined name %q", name, member)
+				}
+			}
+			definedNames[name] = true
+		case roleGroupPrefix + roleLog, roleGroupPrefix + roleVerifier:
+			if len(fields) < 4 {
+				return nil, fmt.Errorf("invalid %s line: %q", keyword, trimmed)
+			}
+			name := fields[1]
+			if definedNames[name] {
+				return nil, fmt.Errorf("duplicate name %q", name)
+			}
+			lineRole := strings.TrimPrefix(keyword, roleGroupPrefix)
+			if roleGroups[name] == nil {
+				roleGroups[name] = make(map[string]bool)
+			}
+			if roleGroups[name][lineRole] {
+				return nil, fmt.Errorf("more than one %s line for %q", keyword, name)
+			}
+			for _, member := range fields[3:] {
+				if !definedNames[member] {
+					return nil, fmt.Errorf("group %q references undefined name %q", name, member)
+				}
+			}
+			roleGroups[name][lineRole] = true
+			if roleGroups[name][roleLog] && roleGroups[name][roleVerifier] {
+				definedNames[name] = true
+			}
+			if lineRole != role {
+				continue
+			}
+			// Rewrite the keyword, dropping any padding that aligned the pair
+			// of lines with each other.
+			i := strings.Index(line, keyword)
+			line = line[:i] + "group " + strings.TrimLeft(line[i+len(keyword):], " \t")
+		case "quorum":
+			if !cfg.requireQuorum {
+				return nil, fmt.Errorf("%s files must not contain %q lines", cfg.kind, keyword)
+			}
+			if len(fields) != 2 {
+				return nil, fmt.Errorf("invalid quorum line: %q", trimmed)
+			}
+			quorumCount++
+			if quorumCount > 1 {
+				return nil, fmt.Errorf("%s file must contain at most one quorum line", cfg.kind)
+			}
+			q := fields[1]
+			if q != "none" && !definedNames[q] {
+				return nil, fmt.Errorf("quorum references undefined name %q", q)
+			}
+		case "log":
+			return nil, fmt.Errorf("%s files must not contain %q lines", cfg.kind, keyword)
+		default:
+			return nil, fmt.Errorf("unrecognised keyword %q in %s file", keyword, cfg.kind)
 		}
+		lines = append(lines, line)
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	// Trim trailing empty lines.
+	var unpaired []string
+	for name, roles := range roleGroups {
+		if !roles[roleLog] || !roles[roleVerifier] {
+			unpaired = append(unpaired, name)
+		}
+	}
+	if len(unpaired) > 0 {
+		sort.Strings(unpaired)
+		return nil, fmt.Errorf("groups need both a %s and a %s line: %s",
+			roleGroupPrefix+roleLog, roleGroupPrefix+roleVerifier, strings.Join(unpaired, ", "))
+	}
+	if cfg.requireQuorum && quorumCount == 0 {
+		return nil, fmt.Errorf("%s file must contain a quorum line", cfg.kind)
+	}
+
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
 
-	return lines, names, nil
+	return lines, nil
 }

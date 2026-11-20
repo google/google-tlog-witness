@@ -1,0 +1,3 @@
+# Any two of cloudflare, geomys and glasklar.
+group cloudflare-geomys-glasklar 2 cloudflare geomys glasklar
+quorum cloudflare-geomys-glasklar

@@ -54,13 +54,23 @@ Once an agreement is in place, to add or update a witness:
 
 ### Witness file format
 
-Witness files use a subset of the tlog-policy line types:
+Witness files use the `witness` and `group` lines from the tlog-policy format,
+plus `group-log` and `group-verifier` for role-specific group definitions:
 
 ```
 # Comments start with '#'; blank lines are ignored.
 witness <name> <vkey> <url>
 group <name> <threshold|any|all> <member>...
+group-log <name> <threshold|any|all> <member>...
+group-verifier <name> <threshold|any|all> <member>...
 ```
+
+A `group-log` and a `group-verifier` line sharing a name define one group
+differently for the two kinds of policy: the log policy gets the `group-log`
+definition and the verifier policy gets the `group-verifier` one, each written
+out as an ordinary `group` line. This lets a witness operator rotate keys by
+editing only their own witness file; see
+[Rotating a witness key](#rotating-a-witness-key).
 
 The rules enforced by `//witnesses:witnesses_test` are:
 
@@ -69,8 +79,12 @@ The rules enforced by `//witnesses:witnesses_test` are:
   `<name>+<keyid>+<key>` format.
 - Witness and group names must be unique within a file, and group members must
   reference names defined earlier in the same file.
+- A name defined by `group-log` must also be defined by `group-verifier`, and
+  vice versa, with exactly one line of each. The name can be used as a group
+  member only after both lines.
 - `log` and `quorum` lines are not permitted in witness files — those are
-  policy-assembly decisions made by `tlog_policy()` callers.
+  policy-assembly decisions made by the callers of `tlog_log_policy()` and
+  `tlog_verifier_policy()`.
 
 ## For tlog-policy consumers
 
@@ -144,12 +158,30 @@ satisfied without the departing witness. Once that has baked, the log policy is
 updated to stop contacting the witness and to adjust the log quorum to match.
 The departing witness can then be cleaned out of the verifier policy entirely.
 
-**Rotating a witness key.** This is effectively an overlapping add-then-remove.
-The verifier quorum is updated first to accept cosignatures from either the old
-or the new key. Once that has baked, the log policy is updated to use the new
-key exclusively (both witness set and log quorum). After the log is reliably
-producing cosignatures with the new key, the verifier policy is cleaned up to
-remove the old key.
+### Rotating a witness key
+
+Rotating a key is an overlapping add-then-remove. Express both policies in the
+witness file with a `group-log` and `group-verifier` pair so product policies
+pick the change up without being edited.
+
+Once the witness is returning cosignatures from both its old and new keys, add
+the new key so the log requires both while verifiers accept either:
+
+```
+witness example-old <vkey> https://witness.example
+witness example-new <vkey> https://witness.example
+group-log      example all example-old example-new
+group-verifier example any example-old example-new
+```
+
+After the log is publishing both cosignatures and verifiers no longer hold
+proofs cosigned only with the old key, remove `example-old` and collapse the
+pair back to a single `group` line:
+
+```
+witness example-new <vkey> https://witness.example
+group example any example-new
+```
 
 **Updating a witness URL.** Only the log policy needs to change, since the URL
 is an operational detail used by the log to contact the witness. Verifier
@@ -180,17 +212,21 @@ The Bazel macros in `build_defs/tlog.bzl` provide:
 
 - `concatenated_log_list(name, srcs)` — concatenates per-product log lists into
   a single combined log list, written to `<name>.txt`.
-- `tlog_policy(name, log_lists, witnesses, quorum, groups=[])` — generates a
-  single tlog-policy file (`<name>.policy`) from log lists, witness configs, and
-  a caller-defined quorum rule. It also creates a `<name>.policy-test` target
-  that validates the generated policy.
-- `tlog_policy_pair(name, log_lists, witnesses, quorum, verifier_quorum=None,
-  groups=[])` — generates a matched pair of log and verifier tlog-policy files
-  from shared inputs, via two `tlog_policy()` targets named `<name>-log` and
-  `<name>-verifier`. An optional `verifier_quorum` allows the verifier quorum to
-  diverge temporarily during a policy rollout. It also creates a
-  `<name>.policy-pair-test` target asserting the divergence is in the safe
-  direction.
+- `tlog_log_policy(name, log_lists, witnesses, policy)` and
+  `tlog_verifier_policy(name, log_lists, witnesses, policy)` — each generates a
+  single tlog-policy file (`<name>.policy`) from log lists, witness configs,
+  and a policy file defining product-level groups and the `quorum` rule, for a
+  log operator and for verifiers respectively. They differ only in which
+  definition they take of a group defined with `group-log` and `group-verifier`
+  lines (in either a witness file or the policy file). Each also creates a
+  `<name>.policy-test` target that validates the generated policy.
+- `tlog_policy_pair(name, log_lists, witnesses, policy)` — generates a matched
+  pair of log and verifier tlog-policy files from shared inputs, via a
+  `tlog_log_policy()` target named `<name>-log` and a `tlog_verifier_policy()`
+  target named `<name>-verifier`. Product-level quorum rollouts can diverge
+  temporarily using `group-log` and `group-verifier` lines in the policy file.
+  It also creates a `<name>.policy-pair-test` target asserting that any
+  divergence is in the safe direction.
 - `log_list_test(name, srcs)` — validates log-list files against the
   [tlog-list spec](https://c2sp.org/tlog-list).
 - `tlog_policy_test(name, srcs)` — validates tlog-policy files against the

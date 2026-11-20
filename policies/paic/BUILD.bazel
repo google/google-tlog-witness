@@ -12,17 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//build_defs:tlog.bzl", "tlog_policy", "tlog_policy_pair", "tlog_policy_pair_test")
-
-# Any two of cloudflare, geomys and glasklar.
-#
-# The tf witness is still contacted, and its cosignatures kept where
-# available, but is not required.
-PAIC_GROUPS = [
-    "group cloudflare-geomys-glasklar 2 cloudflare geomys glasklar",
-]
-
-PAIC_QUORUM = "cloudflare-geomys-glasklar"
+load("//build_defs:tlog.bzl", "tlog_policy_pair", "tlog_policy_pair_test", "tlog_verifier_policy")
 
 PAIC_WITNESSES = [
     "//witnesses:transparency-dev.txt",
@@ -32,7 +22,7 @@ PAIC_WITNESSES = [
 ]
 
 # The dev log also contacts Cloudflare's staging witness. It is not part of
-# PAIC_QUORUM, so its cosignatures are kept where available but never required.
+# the quorum, so its cosignatures are kept where available but never required.
 PAIC_DEV_WITNESSES = PAIC_WITNESSES + [
     "//witnesses:cloudflare-staging.txt",
 ]
@@ -40,9 +30,8 @@ PAIC_DEV_WITNESSES = PAIC_WITNESSES + [
 # Production log and verifier policies.
 tlog_policy_pair(
     name = "prod",
-    groups = PAIC_GROUPS,
     log_lists = ["//logs/paic:log-list.txt"],
-    quorum = PAIC_QUORUM,
+    policy = "policy.txt",
     visibility = ["//visibility:public"],
     witnesses = PAIC_WITNESSES,
 )
@@ -50,9 +39,8 @@ tlog_policy_pair(
 # Development log and verifier policies.
 tlog_policy_pair(
     name = "dev",
-    groups = PAIC_GROUPS,
     log_lists = ["//logs/paic:log-list-dev.txt"],
-    quorum = PAIC_QUORUM,
+    policy = "policy.txt",
     visibility = ["//visibility:public"],
     witnesses = PAIC_DEV_WITNESSES,
 )
@@ -67,14 +55,13 @@ tlog_policy_pair(
 #
 # Production relying parties must NOT use this policy: they should trust the
 # production log alone, via ":prod-verifier".
-tlog_policy(
+tlog_verifier_policy(
     name = "dev-prod-verifier",
-    groups = PAIC_GROUPS,
     log_lists = [
         "//logs/paic:log-list.txt",
         "//logs/paic:log-list-dev.txt",
     ],
-    quorum = PAIC_QUORUM,
+    policy = "policy.txt",
     visibility = ["//visibility:public"],
     witnesses = PAIC_WITNESSES,
 )
