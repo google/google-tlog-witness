@@ -12,231 +12,266 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package main_test
 
 import (
-	"slices"
+	"flag"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestResolveWitnessFile(t *testing.T) {
-	const input = `# An operator adding a second key.
+var binary = flag.String("binary", "", "Path to the gen_tlog_policy binary.")
+
+const sampleLogList = `logs/v0
+vkey example.com/log+deadbeef+AAAA
+`
+
+// runfile resolves a workspace-relative path, as produced by Bazel's
+// $(rootpath), to something executable.
+func runfile(t *testing.T, path string) string {
+	t.Helper()
+	candidates := []string{path}
+	if root := os.Getenv("TEST_SRCDIR"); root != "" {
+		candidates = append(candidates,
+			filepath.Join(root, os.Getenv("TEST_WORKSPACE"), path),
+			filepath.Join(root, path))
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	t.Fatalf("cannot find %q; tried %v", path, candidates)
+	return ""
+}
+
+func writeFile(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func runGenPolicy(t *testing.T, role, logList, witness, policy string) (string, error) {
+	t.Helper()
+	if *binary == "" {
+		t.Fatal("--binary must be set")
+	}
+	dir := t.TempDir()
+	logPath := writeFile(t, dir, "logs.txt", logList)
+	policyPath := writeFile(t, dir, "policy.txt", policy)
+	args := []string{
+		"--role=" + role,
+		"--log-list=" + logPath,
+		"--policy=" + policyPath,
+	}
+	if witness != "" {
+		witnessPath := writeFile(t, dir, "witness.txt", witness)
+		args = append(args, "--witnesses="+witnessPath)
+	}
+	cmd := exec.Command(runfile(t, *binary), args...)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func TestGenTlogPolicyRoleGroups(t *testing.T) {
+	const witness = `# An operator rotating a key.
 witness w-old vkey-old https://w.example
 witness w-new vkey-new https://w.example
 group-log      w all w-old w-new
-group-verifier w any w-old
+group-verifier w any w-old w-new
 
 group operator any w
 `
+	const policy = `# Product quorum.
+group-log      q all operator
+group-verifier q any operator
+quorum q
+`
+
 	for _, tc := range []struct {
-		role      string
-		wantLines []string
-		wantNames []string
+		role         string
+		wantContains []string
+		wantAbsent   []string
 	}{
 		{
-			role: roleLog,
-			wantLines: []string{
-				"# An operator adding a second key.",
+			role: "log",
+			wantContains: []string{
+				"log example.com/log+deadbeef+AAAA",
 				"witness w-old vkey-old https://w.example",
 				"witness w-new vkey-new https://w.example",
-				"group w all w-old w-new",
-				"",
-				"group operator any w",
+				"\ngroup w all w-old w-new\n",
+				"\ngroup operator any w\n",
+				"\ngroup q all operator\n",
+				"\nquorum q\n",
 			},
-			wantNames: []string{"w-old", "w-new", "w", "operator"},
+			wantAbsent: []string{"group-log", "group-verifier", "group w any", "group q any"},
 		},
 		{
-			role: roleVerifier,
-			wantLines: []string{
-				"# An operator adding a second key.",
+			role: "verifier",
+			wantContains: []string{
+				"log example.com/log+deadbeef+AAAA",
 				"witness w-old vkey-old https://w.example",
 				"witness w-new vkey-new https://w.example",
-				"group w any w-old",
-				"",
-				"group operator any w",
+				"\ngroup w any w-old w-new\n",
+				"\ngroup operator any w\n",
+				"\ngroup q any operator\n",
+				"\nquorum q\n",
 			},
-			wantNames: []string{"w-old", "w-new", "w", "operator"},
+			wantAbsent: []string{"group-log", "group-verifier", "group w all", "group q all"},
 		},
 	} {
 		t.Run(tc.role, func(t *testing.T) {
-			lines, names, err := resolveWitnessFile(strings.NewReader(input), tc.role)
+			out, err := runGenPolicy(t, tc.role, sampleLogList, witness, policy)
 			if err != nil {
-				t.Fatalf("resolveWitnessFile() error: %v", err)
+				t.Fatalf("gen_tlog_policy failed: %v\noutput:\n%s", err, out)
 			}
-			if !slices.Equal(lines, tc.wantLines) {
-				t.Errorf("lines:\n%s\nwant:\n%s", strings.Join(lines, "\n"), strings.Join(tc.wantLines, "\n"))
+			for _, want := range tc.wantContains {
+				if !strings.Contains(out, want) {
+					t.Errorf("output missing %q\nfull output:\n%s", want, out)
+				}
 			}
-			if !slices.Equal(names, tc.wantNames) {
-				t.Errorf("names: %q, want %q", names, tc.wantNames)
-			}
-		})
-	}
-}
-
-func TestResolveWitnessFileErrors(t *testing.T) {
-	const witness = "witness w vkey https://w.example\n"
-	for _, tc := range []struct {
-		name    string
-		input   string
-		wantErr string
-	}{
-		{
-			name:    "group-log without group-verifier",
-			input:   witness + "group-log g all w\n",
-			wantErr: "groups need both a group-log and a group-verifier line: g",
-		},
-		{
-			name:    "group-verifier without group-log",
-			input:   witness + "group-verifier g all w\n",
-			wantErr: "groups need both a group-log and a group-verifier line: g",
-		},
-		{
-			name:    "repeated group-log",
-			input:   witness + "group-log g all w\ngroup-log g any w\ngroup-verifier g any w\n",
-			wantErr: `more than one group-log line for "g"`,
-		},
-		{
-			name:    "group-log without members",
-			input:   witness + "group-log g all\ngroup-verifier g all w\n",
-			wantErr: "invalid group-log line",
-		},
-		{
-			name:    "quorum line",
-			input:   witness + "quorum w\n",
-			wantErr: `must not contain "quorum" lines`,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			for _, role := range []string{roleLog, roleVerifier} {
-				_, _, err := resolveWitnessFile(strings.NewReader(tc.input), role)
-				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-					t.Errorf("resolveWitnessFile(role=%s) error: %v, want one containing %q", role, err, tc.wantErr)
+			for _, absent := range tc.wantAbsent {
+				if strings.Contains(out, absent) {
+					t.Errorf("output unexpectedly contains %q\nfull output:\n%s", absent, out)
 				}
 			}
 		})
 	}
 }
 
-func TestResolvePolicyFile(t *testing.T) {
-	const input = `# Quorum rollout: add vendor3 on the log side first.
-group-log      quorum-grp 2 vendor1 vendor2 vendor3
-group-verifier quorum-grp 2 vendor1 vendor2
-quorum quorum-grp
-`
-	witnessNames := map[string]bool{
-		"vendor1": true,
-		"vendor2": true,
-		"vendor3": true,
-	}
-
-	for _, tc := range []struct {
-		role      string
-		wantLines []string
-	}{
-		{
-			role: roleLog,
-			wantLines: []string{
-				"# Quorum rollout: add vendor3 on the log side first.",
-				"group quorum-grp 2 vendor1 vendor2 vendor3",
-				"quorum quorum-grp",
-			},
-		},
-		{
-			role: roleVerifier,
-			wantLines: []string{
-				"# Quorum rollout: add vendor3 on the log side first.",
-				"group quorum-grp 2 vendor1 vendor2",
-				"quorum quorum-grp",
-			},
-		},
-	} {
-		t.Run(tc.role, func(t *testing.T) {
-			lines, err := resolvePolicyFile(strings.NewReader(input), tc.role, witnessNames)
-			if err != nil {
-				t.Fatalf("resolvePolicyFile() error: %v", err)
-			}
-			if !slices.Equal(lines, tc.wantLines) {
-				t.Errorf("lines:\n%s\nwant:\n%s", strings.Join(lines, "\n"), strings.Join(tc.wantLines, "\n"))
-			}
-		})
-	}
-}
-
-func TestResolvePolicyFileQuorumNone(t *testing.T) {
-	lines, err := resolvePolicyFile(strings.NewReader("quorum none\n"), roleLog, map[string]bool{})
+func TestGenTlogPolicyQuorumNone(t *testing.T) {
+	out, err := runGenPolicy(t, "log", sampleLogList, "", "quorum none\n")
 	if err != nil {
-		t.Fatalf("resolvePolicyFile() error: %v", err)
+		t.Fatalf("gen_tlog_policy failed: %v\noutput:\n%s", err, out)
 	}
-	if !slices.Equal(lines, []string{"quorum none"}) {
-		t.Errorf("lines: %q, want [quorum none]", lines)
+	if !strings.Contains(out, "\nquorum none\n") {
+		t.Errorf("output missing quorum none:\n%s", out)
 	}
 }
 
-func TestResolvePolicyFileErrors(t *testing.T) {
-	witnessNames := map[string]bool{"v1": true, "v2": true}
+func TestGenTlogPolicyErrors(t *testing.T) {
+	const validWitness = "witness w1 vkey1 https://w1.example\nwitness w2 vkey2 https://w2.example\n"
+	const validPolicy = "quorum w1\n"
+
 	for _, tc := range []struct {
 		name    string
-		input   string
+		role    string
+		witness string
+		policy  string
 		wantErr string
 	}{
 		{
-			name:    "missing quorum",
-			input:   "group g any v1 v2\n",
-			wantErr: "policy file must contain a quorum line",
+			name:    "invalid role",
+			role:    "other",
+			witness: validWitness,
+			policy:  validPolicy,
+			wantErr: `--role must be "log" or "verifier"`,
 		},
 		{
-			name:    "duplicate quorum",
-			input:   "quorum v1\nquorum v2\n",
-			wantErr: "at most one quorum line",
-		},
-		{
-			name:    "undefined quorum",
-			input:   "quorum nobody\n",
-			wantErr: `quorum references undefined name "nobody"`,
-		},
-		{
-			name:    "undefined group member",
-			input:   "group g any v1 nobody\nquorum g\n",
-			wantErr: `group "g" references undefined name "nobody"`,
-		},
-		{
-			name:    "duplicate name with witness",
-			input:   "group v1 any v2\nquorum v1\n",
-			wantErr: `duplicate name "v1"`,
-		},
-		{
-			name:    "unpaired group-log",
-			input:   "group-log g any v1\nquorum v1\n",
+			name:    "witness group-log without group-verifier",
+			role:    "log",
+			witness: validWitness + "group-log g all w1\n",
+			policy:  validPolicy,
 			wantErr: "groups need both a group-log and a group-verifier line: g",
 		},
 		{
-			name:    "quorum references half-defined role group",
-			input:   "group-log g any v1\nquorum g\ngroup-verifier g any v1\n",
+			name:    "witness repeated group-log",
+			role:    "log",
+			witness: validWitness + "group-log g all w1\ngroup-log g any w1\ngroup-verifier g any w1\n",
+			policy:  validPolicy,
+			wantErr: `more than one group-log line for "g"`,
+		},
+		{
+			name:    "witness quorum forbidden",
+			role:    "log",
+			witness: validWitness + "quorum w1\n",
+			policy:  validPolicy,
+			wantErr: `witness files must not contain "quorum" lines`,
+		},
+		{
+			name:    "policy missing quorum",
+			role:    "log",
+			witness: validWitness,
+			policy:  "group g any w1 w2\n",
+			wantErr: "policy file must contain a quorum line",
+		},
+		{
+			name:    "policy duplicate quorum",
+			role:    "log",
+			witness: validWitness,
+			policy:  "quorum w1\nquorum w2\n",
+			wantErr: "at most one quorum line",
+		},
+		{
+			name:    "policy undefined quorum",
+			role:    "log",
+			witness: validWitness,
+			policy:  "quorum nobody\n",
+			wantErr: `quorum references undefined name "nobody"`,
+		},
+		{
+			name:    "policy undefined group member",
+			role:    "log",
+			witness: validWitness,
+			policy:  "group g any w1 nobody\nquorum g\n",
+			wantErr: `group "g" references undefined name "nobody"`,
+		},
+		{
+			name:    "policy duplicate name with witness",
+			role:    "log",
+			witness: validWitness,
+			policy:  "group w1 any w2\nquorum w1\n",
+			wantErr: `duplicate name "w1"`,
+		},
+		{
+			name:    "policy unpaired group-log",
+			role:    "verifier",
+			witness: validWitness,
+			policy:  "group-log g any w1\nquorum w1\n",
+			wantErr: "groups need both a group-log and a group-verifier line: g",
+		},
+		{
+			name:    "policy quorum references half-defined role group",
+			role:    "log",
+			witness: validWitness,
+			policy:  "group-log g any w1\nquorum g\ngroup-verifier g any w1\n",
 			wantErr: `quorum references undefined name "g"`,
 		},
 		{
-			name:    "witness line forbidden",
-			input:   "witness w vkey https://w.example\nquorum v1\n",
-			wantErr: `must not contain "witness" lines`,
+			name:    "policy witness line forbidden",
+			role:    "log",
+			witness: validWitness,
+			policy:  "witness w3 vkey3 https://w3.example\nquorum w1\n",
+			wantErr: `policy files must not contain "witness" lines`,
 		},
 		{
-			name:    "log line forbidden",
-			input:   "log vkey\nquorum v1\n",
-			wantErr: `must not contain "log" lines`,
+			name:    "policy log line forbidden",
+			role:    "log",
+			witness: validWitness,
+			policy:  "log vkey\nquorum w1\n",
+			wantErr: `policy files must not contain "log" lines`,
 		},
 		{
-			name:    "unknown keyword",
-			input:   "bogus foo\nquorum v1\n",
+			name:    "policy unknown keyword",
+			role:    "log",
+			witness: validWitness,
+			policy:  "bogus foo\nquorum w1\n",
 			wantErr: `unrecognised keyword "bogus"`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			for _, role := range []string{roleLog, roleVerifier} {
-				_, err := resolvePolicyFile(strings.NewReader(tc.input), role, witnessNames)
-				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-					t.Errorf("resolvePolicyFile(role=%s) error: %v, want one containing %q", role, err, tc.wantErr)
-				}
+			out, err := runGenPolicy(t, tc.role, sampleLogList, tc.witness, tc.policy)
+			if err == nil {
+				t.Fatalf("expected error containing %q, but succeeded with output:\n%s", tc.wantErr, out)
+			}
+			if !strings.Contains(out, tc.wantErr) {
+				t.Errorf("stderr/stdout:\n%s\nwant it to contain %q", out, tc.wantErr)
 			}
 		})
 	}

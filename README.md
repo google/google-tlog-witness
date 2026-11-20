@@ -54,7 +54,8 @@ Once an agreement is in place, to add or update a witness:
 
 ### Witness file format
 
-Witness files use a subset of the tlog-policy line types:
+Witness files use the `witness` and `group` lines from the tlog-policy format,
+plus `group-log` and `group-verifier` for role-specific group definitions:
 
 ```
 # Comments start with '#'; blank lines are ignored.
@@ -67,9 +68,9 @@ group-verifier <name> <threshold|any|all> <member>...
 A `group-log` and a `group-verifier` line sharing a name define one group
 differently for the two kinds of policy: the log policy gets the `group-log`
 definition and the verifier policy gets the `group-verifier` one, each written
-out as an ordinary `group` line. This is how a witness operator changes their
-own keys without anyone editing a product's policy; see
-[Changing a witness's keys](#changing-a-witnesss-keys).
+out as an ordinary `group` line. This lets a witness operator rotate keys by
+editing only their own witness file; see
+[Rotating a witness key](#rotating-a-witness-key).
 
 The rules enforced by `//witnesses:witnesses_test` are:
 
@@ -84,51 +85,6 @@ The rules enforced by `//witnesses:witnesses_test` are:
 - `log` and `quorum` lines are not permitted in witness files — those are
   policy-assembly decisions made by the callers of `tlog_log_policy()` and
   `tlog_verifier_policy()`.
-
-### Changing a witness's keys
-
-While a witness changes its keys, the log and verifiers need different
-definitions of that witness's group, and they change at different times (see
-[Policy rollout](#policy-rollout)). Express both in your witness file with a
-`group-log` and `group-verifier` pair. Products refer to your group by name, so
-their policies pick the change up without being edited.
-
-For example, a witness that signs with Ed25519 adds an ML-DSA-44 key. First,
-have the witness return both cosignatures. Then add the new key, require it of
-the log, and leave verifiers as they were:
-
-```
-witness example-ed25519 <vkey> https://witness.example
-witness example-mldsa44 <vkey> https://witness.example
-group-log      example all example-ed25519 example-mldsa44
-group-verifier example all example-ed25519
-```
-
-Once the log publishes both cosignatures and verifiers no longer hold proofs
-from before it did, require both keys everywhere by going back to one line:
-
-```
-group example all example-ed25519 example-mldsa44
-```
-
-Replacing a key takes one more step, because verifiers must accept the new key
-before the log starts to rely on it. First, verifiers accept either key while
-the log still requires the old one:
-
-```
-witness example-old <vkey> https://witness.example
-witness example-new <vkey> https://witness.example
-group-log      example all example-old
-group-verifier example any example-old example-new
-```
-
-Once verifiers have that policy, move the log to the new key by changing the
-`group-log` line to `all example-new`. Finally, once verifiers no longer hold
-proofs cosigned with the old key, remove it and go back to one `group` line.
-
-`//witnesses:witnesses_test` checks the file, and each product's
-`<name>.policy-pair-test` fails if a pair would let the log publish a
-checkpoint that its verifiers reject.
 
 ## For tlog-policy consumers
 
@@ -202,14 +158,30 @@ satisfied without the departing witness. Once that has baked, the log policy is
 updated to stop contacting the witness and to adjust the log quorum to match.
 The departing witness can then be cleaned out of the verifier policy entirely.
 
-**Rotating a witness key.** This is effectively an overlapping add-then-remove.
-The verifier quorum is updated first to accept cosignatures from either the old
-or the new key. Once that has baked, the log policy is updated to use the new
-key exclusively (both witness set and log quorum). After the log is reliably
-producing cosignatures with the new key, the verifier policy is cleaned up to
-remove the old key. The witness operator can make each of these changes in
-their own witness file; see
-[Changing a witness's keys](#changing-a-witnesss-keys).
+### Rotating a witness key
+
+Rotating a key is an overlapping add-then-remove. Express both policies in the
+witness file with a `group-log` and `group-verifier` pair so product policies
+pick the change up without being edited.
+
+Once the witness is returning cosignatures from both its old and new keys, add
+the new key so the log requires both while verifiers accept either:
+
+```
+witness example-old <vkey> https://witness.example
+witness example-new <vkey> https://witness.example
+group-log      example all example-old example-new
+group-verifier example any example-old example-new
+```
+
+After the log is publishing both cosignatures and verifiers no longer hold
+proofs cosigned only with the old key, remove `example-old` and collapse the
+pair back to a single `group` line:
+
+```
+witness example-new <vkey> https://witness.example
+group example any example-new
+```
 
 **Updating a witness URL.** Only the log policy needs to change, since the URL
 is an operational detail used by the log to contact the witness. Verifier

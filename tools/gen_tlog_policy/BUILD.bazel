@@ -33,5 +33,6 @@ go_binary(
 go_test(
     name = "gen_tlog_policy_test",
     srcs = ["gen_tlog_policy_test.go"],
-    embed = [":gen_tlog_policy_lib"],
+    args = ["--binary=$(rootpath :gen_tlog_policy)"],
+    data = [":gen_tlog_policy"],
 )
