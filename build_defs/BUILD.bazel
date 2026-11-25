@@ -17,18 +17,20 @@ load("//build_defs:tlog.bzl", "tlog_proof_test")
 # This package provides Bazel macros for log-list and tlog-policy generation.
 
 # The .go files in this package are not a Go package: they are template test
-# sources exported for use by the log_list_test and tlog_policy_test macros,
+# sources exported for use by the test macros in tlog.bzl,
 # which compile them in the consuming package alongside its data files.
 # gazelle:exclude log_list_files_test.go
 # gazelle:exclude tlog_policy_files_test.go
 # gazelle:exclude policy_pair_test.go
 # gazelle:exclude tlog_proof_test.go
+# gazelle:exclude witness_list_test.go
 
 exports_files([
     "log_list_files_test.go",
     "tlog_policy_files_test.go",
     "policy_pair_test.go",
     "tlog_proof_test.go",
+    "witness_list_test.go",
 ])
 
 # Smoke test for the tlog_proof_test macro.

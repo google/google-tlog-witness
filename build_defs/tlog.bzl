@@ -39,6 +39,41 @@ def concatenated_log_list(name, srcs, visibility = None):
         visibility = visibility,
     )
 
+def concatenated_witness_list(name, role, srcs, visibility = None):
+    """Concatenates witness config files into a single witness list.
+
+    Produces <name>.txt containing every witness and group defined by srcs as
+    seen by one role: each pair of "group-log" and "group-verifier" lines is
+    resolved to the definition for that role. The build fails if two files
+    define the same name.
+
+    The output is a witness config file, not a tlog-policy: it contains no
+    "log" lines and no "quorum" line. Also creates a <name>.witness-list-test
+    target via witness_list_test() to validate the list.
+
+    Args:
+        name: Target name. The output file will be <name>.txt.
+        role: Role whose view of the witnesses to emit: "log" or "verifier".
+        srcs: List of witness config file labels.
+        visibility: Standard Bazel visibility.
+    """
+    native.genrule(
+        name = name,
+        srcs = srcs,
+        outs = [name + ".txt"],
+        cmd = "$(location //tools/gen_witness_list) " +
+              "--role=%s " % role +
+              " ".join(["--input=$(location %s)" % s for s in srcs]) +
+              " --output=$@",
+        tools = ["//tools/gen_witness_list"],
+        visibility = visibility,
+    )
+
+    witness_list_test(
+        name = name + ".witness-list-test",
+        witness_list = name + ".txt",
+    )
+
 def _tlog_policy(name, role, log_lists, witnesses, policy, visibility):
     """Generates a tlog-policy file for the given role ("log" or "verifier").
 
@@ -173,6 +208,28 @@ def tlog_policy_pair(name, log_lists, witnesses, policy, visibility = None):
         name = name + ".policy-pair-test",
         log_policy = name + "-log.policy",
         verifier_policy = name + "-verifier.policy",
+    )
+
+def witness_list_test(name, witness_list, **kwargs):
+    """Validates a generated witness list file.
+
+    Creates a go_test target that checks witness_list contains only "witness"
+    and "group" lines, defines at least one witness, and is accepted by the
+    tlog-policy parser (github.com/transparency-dev/formats/policy) once a
+    "quorum none" line is appended.
+
+    Args:
+        name: Target name for the test.
+        witness_list: Label of the witness list file to validate.
+        **kwargs: Additional arguments passed to go_test (e.g. tags, size).
+    """
+    go_test(
+        name = name,
+        srcs = ["//build_defs:witness_list_test.go"],
+        args = ["--witness_list=$(rootpath %s)" % witness_list],
+        data = [witness_list],
+        deps = ["@com_github_transparency_dev_formats//policy"],
+        **kwargs
     )
 
 def tlog_policy_pair_test(name, log_policy, verifier_policy, **kwargs):

@@ -123,6 +123,32 @@ bazel run //logs:copy_generated_10qps-10klogs_list
 The `//logs:copy_generated_10qps-10klogs_list_test` test will fail if the
 checked-in file falls out of sync with the generated output.
 
+### Witness list
+
+`//witnesses:all-witnesses-log` collects every witness and group defined in
+`witnesses/*.txt`, as a log sees them, into a single file
+(`all-witnesses-log.txt`):
+
+```bash
+bazel build //witnesses:all-witnesses-log
+```
+
+The output is itself a witness config file containing only `witness` and
+`group` lines (with `group-log` / `group-verifier` pairs resolved for the
+`log` role). It is not a tlog-policy: it has no `log` lines and no `quorum`
+line. To read it with a standard tlog-policy parser (such as
+`github.com/transparency-dev/formats/policy`), append a `quorum none` line
+before parsing.
+
+This list lets software that runs a log check its policy — at start-up or in
+a test — against the repository's canonical definitions. Because a product's
+policy may define its own groups, it could by mistake or on purpose reuse a
+name from `witnesses/` for different witnesses. Checking against the list
+ensures that any name appearing in both has the same key and URL (for a
+witness) or the same threshold and members (for a group), which matters when
+monitoring pools results from several logs by witness or group name. This
+repository only publishes the list; consumers perform the comparison.
+
 ## Policy rollout
 
 Changes to the witness set — adding a witness, removing one, rotating a key, or
@@ -212,6 +238,15 @@ The Bazel macros in `build_defs/tlog.bzl` provide:
 
 - `concatenated_log_list(name, srcs)` — concatenates per-product log lists into
   a single combined log list, written to `<name>.txt`.
+- `concatenated_witness_list(name, role, srcs)` — concatenates witness config
+  files into a single witness list (`<name>.txt`) as seen by `role` (`"log"`
+  or `"verifier"`), resolving role-qualified groups and failing the build if
+  two files define the same name. The output contains only `witness` and
+  `group` lines (no `log` or `quorum` lines). Also creates a
+  `<name>.witness-list-test` target that validates the list.
+- `witness_list_test(name, witness_list)` — checks that `witness_list` holds
+  only `witness` and `group` lines, defines at least one witness, and is
+  accepted by the tlog-policy parser once a `quorum none` line is appended.
 - `tlog_log_policy(name, log_lists, witnesses, policy)` and
   `tlog_verifier_policy(name, log_lists, witnesses, policy)` — each generates a
   single tlog-policy file (`<name>.policy`) from log lists, witness configs,
