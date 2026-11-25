@@ -13,8 +13,19 @@
 # limitations under the License.
 
 load("@rules_go//go:def.bzl", "go_test")
+load("//build_defs:tlog.bzl", "concatenated_witness_list")
 
 exports_files(glob(["*.txt"]))
+
+# All witnesses and groups defined in witnesses/*.txt, as a log sees them.
+# Log software can check its policy against this list so that any name defined
+# here keeps the same witness or group definition across policies.
+concatenated_witness_list(
+    name = "all-witnesses-log",
+    srcs = glob(["*.txt"]),
+    role = "log",
+    visibility = ["//visibility:public"],
+)
 
 go_test(
     name = "witnesses_test",
