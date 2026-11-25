@@ -19,7 +19,10 @@ go_library(
     srcs = ["gen_tlog_policy.go"],
     importpath = "github.com/google/google-tlog-witness/tools/gen_tlog_policy",
     visibility = ["//visibility:private"],
-    deps = ["//internal/flagutil"],
+    deps = [
+        "//internal/flagutil",
+        "//internal/section",
+    ],
 )
 
 go_binary(
